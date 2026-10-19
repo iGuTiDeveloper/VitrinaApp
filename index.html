@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="es" class="dark h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vitrina - Control Comercial & Devoluciones</title>
+  
+  <!-- FAVICON (Logo en la pestaña del navegador) -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='25' fill='%23059669'/><path d='M22 62c2-8 9-14 18-14h18c7 0 13-4 16-10 2-4 6-6 10-5 5 2 7 8 5 13l-4 11c-2 5-7 8-12 8H28c-4 0-7-2-8-6l2-7z' fill='none' stroke='white' stroke-width='6' stroke-linecap='round' stroke-linejoin='round'/><circle cx='36' cy='62' r='4' fill='white'/><circle cx='52' cy='62' r='4' fill='white'/><circle cx='68' cy='62' r='4' fill='white'/></svg>">
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen font-sans antialiased pb-28 md:pb-12 md:pt-20 flex flex-col justify-between">
+
+  <!-- Header Superior -->
+  <header class="fixed top-0 left-0 right-0 bg-slate-800 border-b border-slate-700 z-40 px-4 py-3 flex items-center justify-between shadow-md">
+    <!-- Logo -->
+    <div class="flex items-center space-x-3">
+      <div class="w-9 h-9 bg-emerald-600 text-white rounded-xl flex items-center justify-center font-bold text-lg shadow-md shadow-emerald-600/30">
+        <i class="fa-solid fa-shoe-prints text-sm"></i>
+      </div>
+      <div>
+        <h1 class="text-lg font-bold tracking-tight text-emerald-400 leading-none">Vit<span class="text-white">rina</span></h1>
+        <p class="text-[10px] text-slate-400 font-medium mt-0.5">Control Comercial & Devoluciones</p>
+      </div>
+    </div>
+
+    <!-- Navegación Escritorio -->
+    <nav class="hidden md:flex items-center space-x-1 bg-slate-700/60 p-1 rounded-xl border border-slate-600">
+      <button onclick="switchTab('dashboard')" id="nav-desk-dashboard" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-emerald-400 shadow-sm transition-all">
+        <i class="fa-solid fa-chart-pie"></i>
+        <span>Inicio</span>
+      </button>
+      <button onclick="switchTab('inventario')" id="nav-desk-inventario" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition-all">
+        <i class="fa-solid fa-shoe-prints"></i>
+        <span>Stock</span>
+      </button>
+      <button onclick="switchTab('caja')" id="nav-desk-caja" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition-all">
+        <i class="fa-solid fa-receipt"></i>
+        <span>Ventas</span>
+      </button>
+      <button onclick="switchTab('devoluciones')" id="nav-desk-devoluciones" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition-all">
+        <i class="fa-solid fa-rotate-left"></i>
+        <span>Devoluciones</span>
+      </button>
+    </nav>
+    
+    <!-- Limpieza -->
+    <button onclick="resetAppClean()" title="Limpiar Todo" class="p-2 text-slate-400 hover:text-red-400 rounded-lg hover:bg-slate-700 transition-colors">
+      <i class="fa-solid fa-trash-can text-sm"></i>
+    </button>
+  </header>
+
+  <!-- Layout Principal -->
+  <main class="max-w-4xl mx-auto px-4 pt-16 md:pt-4 w-full flex-grow">
+
+    <!-- SECCIÓN 1: DASHBOARD -->
+    <section id="sec-dashboard" class="space-y-4 py-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-xl font-bold text-white">Resumen Comercial</h2>
+          <p class="text-xs text-slate-400">Control de ventas, stock y devoluciones en tiempo real</p>
+        </div>
+      </div>
+
+      <!-- Tarjetas de Métricas -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-sm">
+          <p class="text-xs font-medium text-slate-400 mb-1">Total Referencias</p>
+          <p id="dash-total-prods" class="text-2xl font-bold text-white">0</p>
+        </div>
+        <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-sm">
+          <p class="text-xs font-medium text-slate-400 mb-1">Pares en Stock</p>
+          <p id="dash-total-units" class="text-2xl font-bold text-white">0</p>
+        </div>
+        <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-sm">
+          <p class="text-xs font-medium text-slate-400 mb-1">Ventas Registradas</p>
+          <p id="dash-ventas-hoy" class="text-2xl font-bold text-emerald-400">$0</p>
+        </div>
+        <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-sm">
+          <p class="text-xs font-medium text-slate-400 mb-1">Devoluciones Pendientes</p>
+          <p id="dash-dev-pendientes" class="text-2xl font-bold text-amber-500">0</p>
+        </div>
+      </div>
+
+      <!-- Acciones Rápidas -->
+      <div class="grid grid-cols-2 gap-3 pt-2">
+        <button onclick="switchTab('inventario')" class="flex items-center justify-center space-x-2 bg-emerald-600 hover:bg-emerald-700 text-white p-3.5 rounded-xl font-semibold shadow-lg shadow-emerald-600/20 transition-all">
+          <i class="fa-solid fa-shoe-prints text-lg"></i>
+          <span class="text-sm">Ver / Agregar Stock</span>
+        </button>
+        <button onclick="switchTab('caja')" class="flex items-center justify-center space-x-2 bg-slate-700 hover:bg-slate-600 text-white p-3.5 rounded-xl font-semibold shadow-md transition-all">
+          <i class="fa-solid fa-receipt text-sm"></i>
+          <span class="text-sm">Ver Ventas & Devolver</span>
+        </button>
+      </div>
+
+      <!-- Estado / Alertas de Inventario Dinámicas -->
+      <div class="bg-slate-800 rounded-xl border border-slate-700 p-4 shadow-sm space-y-3">
+        <h3 id="dash-alert-title" class="text-sm font-bold flex items-center space-x-2">
+          <!-- Título dinámico -->
+        </h3>
+        <div id="dash-alert-list" class="space-y-2 text-xs">
+          <!-- Lista dinámica -->
+        </div>
+      </div>
+    </section>
+
+    <!-- SECCIÓN 2: INVENTARIO (STOCK) -->
+    <section id="sec-inventario" class="space-y-4 py-4 hidden">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-xl font-bold text-white">Inventario de Zapatillas</h2>
+          <p class="text-xs text-slate-400">Administra códigos, modelos, curvas de tallas y ventas en directo</p>
+        </div>
+        <button onclick="toggleFormProducto()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-2 rounded-lg font-medium flex items-center space-x-1">
+          <i class="fa-solid fa-plus"></i>
+          <span>Nueva Zapatilla</span>
+        </button>
+      </div>
+
+      <!-- Formulario Multitalla para Agregar Producto -->
+      <div id="form-producto" class="hidden bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-md space-y-4">
+        <h3 class="text-sm font-bold text-white border-b border-slate-700 pb-2">Registrar Modelo y Curva de Tallas</h3>
+        
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+          <div>
+            <label class="block font-semibold text-slate-300 mb-1">Código de 4 Dígitos</label>
+            <input type="text" id="prod-codigo" maxlength="4" placeholder="Ej: 3954" class="w-full p-2 bg-slate-700 text-white border border-slate-600 rounded-lg font-mono uppercase">
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-300 mb-1">Modelo / Referencia</label>
+            <input type="text" id="prod-nombre" placeholder="Ej: NIKE AF1 DAMA" class="w-full p-2 bg-slate-700 text-white border border-slate-600 rounded-lg">
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-300 mb-1">Tipo de Tallaje / Curva</label>
+            <select id="prod-tipo-talla" onchange="generarCamposTallas()" class="w-full p-2 bg-slate-700 text-white border border-slate-600 rounded-lg font-medium">
+              <option value="dama">Curva Dama (36 al 39)</option>
+              <option value="caballero">Curva Caballero (40 al 44)</option>
+              <option value="custom">Personalizado / Talla Especial</option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-300 mb-1">Costo Compra ($)</label>
+            <input type="number" id="prod-costo" placeholder="0" class="w-full p-2 bg-slate-700 text-white border border-slate-600 rounded-lg">
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-300 mb-1">Precio Venta Público ($)</label>
+            <input type="number" id="prod-precio" placeholder="0" class="w-full p-2 bg-slate-700 text-white border border-slate-600 rounded-lg">
+          </div>
+        </div>
+
+        <!-- Sección para ingresar Pares por Talla -->
+        <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-700/80 space-y-2">
+          <p class="text-xs font-bold text-emerald-400">Pares Disponibles por Talla:</p>
+          <div id="contenedor-tallas" class="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
+            <!-- Dinámico por JS -->
+          </div>
+        </div>
+
+        <div class="flex justify-end space-x-2 pt-2">
+          <button onclick="toggleFormProducto()" class="px-3 py-1.5 text-xs text-slate-400 font-medium">Cancelar</button>
+          <button onclick="guardarProductoMultitalla()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-4 py-1.5 rounded-lg font-semibold">Guardar Referencia</button>
+        </div>
+      </div>
+
+      <!-- Tabla de Productos -->
+      <div class="bg-slate-800 rounded-xl border border-slate-700 shadow-sm overflow-hidden">
+        <div class="p-3 border-b border-slate-700 bg-slate-800/50 flex items-center justify-between">
+          <input type="text" id="search-inventory" onkeyup="renderInventario()" placeholder="🔍 Buscar por Código (4 dígitos) o Modelo..." class="text-xs p-2 bg-slate-700 text-white border border-slate-600 rounded-lg w-full max-w-sm">
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs text-slate-300">
+            <thead class="bg-slate-700/50 text-slate-400 uppercase font-semibold border-b border-slate-700">
+              <tr>
+                <th class="p-3">Código</th>
+                <th class="p-3">Modelo</th>
+                <th class="p-3">Talla</th>
+                <th class="p-3 text-right">Precio Venta</th>
+                <th class="p-3 text-center">Stock</th>
+                <th class="p-3 text-center">Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="inventory-table-body" class="divide-y divide-slate-700">
+              <!-- Dinámico -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECCIÓN 3: REGISTRO DE VENTAS -->
+    <section id="sec-caja" class="space-y-4 py-4 hidden">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-xl font-bold text-white">Registro de Ventas</h2>
+          <p class="text-xs text-slate-400">Historial de ventas. Utiliza el botón "Devolver" si el cliente no regresó por el pedido</p>
+        </div>
+        <button onclick="exportarCSV()" class="bg-slate-700 hover:bg-slate-600 text-white text-xs px-3 py-2 rounded-lg font-medium flex items-center space-x-1">
+          <i class="fa-solid fa-file-csv"></i>
+          <span>Exportar CSV</span>
+        </button>
+      </div>
+
+      <div class="bg-slate-800 rounded-xl border border-slate-700 shadow-sm overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs text-slate-300">
+            <thead class="bg-slate-700/50 text-slate-400 uppercase font-semibold border-b border-slate-700">
+              <tr>
+                <th class="p-3">Fecha</th>
+                <th class="p-3">Detalle de Zapatillas</th>
+                <th class="p-3 text-right">Total</th>
+                <th class="p-3 text-center">Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="sales-table-body" class="divide-y divide-slate-700">
+              <!-- Dinámico -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECCIÓN 4: DEVOLUCIONES Y REINTEGRO AL STOCK -->
+    <section id="sec-devoluciones" class="space-y-4 py-4 hidden">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-xl font-bold text-white">Devoluciones & Reintegro</h2>
+          <p class="text-xs text-slate-400">Pares devueltos por clientes. Reintégralos al stock con un solo clic</p>
+        </div>
+      </div>
+
+      <div class="bg-slate-800 rounded-xl border border-slate-700 shadow-sm overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs text-slate-300">
+            <thead class="bg-slate-700/50 text-slate-400 uppercase font-semibold border-b border-slate-700">
+              <tr>
+                <th class="p-3">Fecha Devolución</th>
+                <th class="p-3">Detalle / Zapato</th>
+                <th class="p-3">Motivo / Razón</th>
+                <th class="p-3 text-center">Estado Stock</th>
+                <th class="p-3 text-center">Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="returns-table-body" class="divide-y divide-slate-700">
+              <!-- Dinámico -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- PIE DE PÁGINA / FOOTER CON CRÉDITOS -->
+  <footer class="mt-8 border-t border-slate-800 py-6 px-4 bg-slate-900/80 text-center text-xs text-slate-500">
+    <div class="max-w-4xl mx-auto flex flex-col md:flex-row items-center justify-between gap-3">
+      <div class="flex items-center space-x-2">
+        <span class="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+        <span class="font-medium text-slate-400">Vitrina v1.0 • Sistema de Bodega</span>
+      </div>
+      <div>
+        <span>Diseñado & Desarrollado por </span>
+        <strong class="text-emerald-400 font-bold">Juan David Lenis</strong>
+      </div>
+      <div class="flex items-center space-x-3">
+        <a href="https://wa.me/573181848375?text=Hola,%20requiero%20soporte%20sobre%20el%20sistema%20Vitrina" target="_blank" class="text-slate-400 hover:text-emerald-400 transition-colors flex items-center space-x-1">
+          <i class="fa-brands fa-whatsapp text-sm"></i>
+          <span>Contacto / Soporte</span>
+        </a>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Navegación Inferior (Móvil) -->
+  <nav class="md:hidden fixed bottom-0 left-0 right-0 bg-slate-800 border-t border-slate-700 z-40 flex justify-around py-2 shadow-lg">
+    <button onclick="switchTab('dashboard')" id="nav-mob-dashboard" class="flex flex-col items-center text-emerald-400 px-3 py-1">
+      <i class="fa-solid fa-chart-pie text-base"></i>
+      <span class="text-[10px] font-medium mt-1">Inicio</span>
+    </button>
+    <button onclick="switchTab('inventario')" id="nav-mob-inventario" class="flex flex-col items-center text-slate-500 hover:text-slate-300 px-3 py-1">
+      <i class="fa-solid fa-shoe-prints text-base"></i>
+      <span class="text-[10px] font-medium mt-1">Stock</span>
+    </button>
+    <button onclick="switchTab('caja')" id="nav-mob-caja" class="flex flex-col items-center text-slate-500 hover:text-slate-300 px-3 py-1">
+      <i class="fa-solid fa-receipt text-base"></i>
+      <span class="text-[10px] font-medium mt-1">Ventas</span>
+    </button>
+    <button onclick="switchTab('devoluciones')" id="nav-mob-devoluciones" class="flex flex-col items-center text-slate-500 hover:text-slate-300 px-3 py-1">
+      <i class="fa-solid fa-rotate-left text-base"></i>
+      <span class="text-[10px] font-medium mt-1">Devolución</span>
+    </button>
+  </nav>
+
+  <!-- JAVASCRIPT -->
+  <script>
+    const KEY_PRODS = 'vitrina_app_prods_v1';
+    const KEY_VENTAS = 'vitrina_app_ventas_v1';
+    const KEY_DEVS = 'vitrina_app_devs_v1';
+
+    let productos = JSON.parse(localStorage.getItem(KEY_PRODS)) || [];
+    let ventas = JSON.parse(localStorage.getItem(KEY_VENTAS)) || [];
+    let devoluciones = JSON.parse(localStorage.getItem(KEY_DEVS)) || [];
+
+    function obtenerFechaFormateada() {
+      const now = new Date();
+      const aAAA = now.getFullYear();
+      const mm = String(now.getMonth() + 1).padStart(2, '0');
+      const dd = String(now.getDate()).padStart(2, '0');
+      const hh = String(now.getHours()).padStart(2, '0');
+      const min = String(now.getMinutes()).padStart(2, '0');
+      return `${aAAA}-${mm}-${dd} ${hh}:${min}`;
+    }
+
+    function init() {
+      generarCamposTallas();
+      renderDashboard();
+      renderInventario();
+      renderVentas();
+      renderDevoluciones();
+    }
+
+    function switchTab(tabId) {
+      ['dashboard', 'inventario', 'caja', 'devoluciones'].forEach(id => {
+        document.getElementById(`sec-${id}`).classList.add('hidden');
+        
+        const mobNav = document.getElementById(`nav-mob-${id}`);
+        if(mobNav) {
+          mobNav.classList.remove('text-emerald-400');
+          mobNav.classList.add('text-slate-500');
+        }
+
+        const deskNav = document.getElementById(`nav-desk-${id}`);
+        if(deskNav) {
+          deskNav.className = "flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition-all";
+        }
+      });
+
+      document.getElementById(`sec-${tabId}`).classList.remove('hidden');
+      
+      const activeMobNav = document.getElementById(`nav-mob-${tabId}`);
+      if(activeMobNav) {
+        activeMobNav.classList.remove('text-slate-500');
+        activeMobNav.classList.add('text-emerald-400');
+      }
+
+      const activeDeskNav = document.getElementById(`nav-desk-${tabId}`);
+      if(activeDeskNav) {
+        activeDeskNav.className = "flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-emerald-400 shadow-sm transition-all";
+      }
+    }
+
+    function generarCamposTallas() {
+      const tipo = document.getElementById('prod-tipo-talla').value;
+      const container = document.getElementById('contenedor-tallas');
+      container.innerHTML = '';
+
+      if (tipo === 'dama') {
+        ['36', '37', '38', '39'].forEach(t => {
+          container.innerHTML += `
+            <div class="bg-slate-800 p-2 rounded-lg border border-slate-700 text-center">
+              <label class="block font-bold text-slate-300 mb-1">Talla ${t}</label>
+              <input type="number" min="0" data-talla="${t}" placeholder="0" class="input-talla-stock w-full p-1 bg-slate-700 text-white text-center border border-slate-600 rounded font-bold focus:border-emerald-500 focus:outline-none">
+            </div>
+          `;
+        });
+      } else if (tipo === 'caballero') {
+        ['40', '41', '42', '43', '44'].forEach(t => {
+          container.innerHTML += `
+            <div class="bg-slate-800 p-2 rounded-lg border border-slate-700 text-center">
+              <label class="block font-bold text-slate-300 mb-1">Talla ${t}</label>
+              <input type="number" min="0" data-talla="${t}" placeholder="0" class="input-talla-stock w-full p-1 bg-slate-700 text-white text-center border border-slate-600 rounded font-bold focus:border-emerald-500 focus:outline-none">
+            </div>
+          `;
+        });
+      } else {
+        container.innerHTML = `
+          <div class="col-span-full grid grid-cols-2 gap-2">
+            <div>
+              <label class="block font-semibold text-slate-300 mb-1">Número de Talla Especial</label>
+              <input type="text" id="custom-talla-num" placeholder="Ej: 35.5 / 45 / US 8" class="w-full p-2 bg-slate-700 text-white border border-slate-600 rounded">
+            </div>
+            <div>
+              <label class="block font-semibold text-slate-300 mb-1">Pares Disponibles</label>
+              <input type="number" min="1" id="custom-talla-qty" placeholder="0" class="w-full p-2 bg-slate-700 text-white border border-slate-600 rounded font-bold">
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    function guardarProductoMultitalla() {
+      const codigo = document.getElementById('prod-codigo').value.trim().toUpperCase();
+      const nombre = document.getElementById('prod-nombre').value.trim();
+      const tipo = document.getElementById('prod-tipo-talla').value;
+      const costo = parseFloat(document.getElementById('prod-costo').value) || 0;
+      const precio = parseFloat(document.getElementById('prod-precio').value) || 0;
+
+      if (!codigo || codigo.length !== 4) {
+        alert('Por favor ingresa un código único de 4 dígitos para identificar el zapato.');
+        return;
+      }
+
+      if (!nombre || precio <= 0) {
+        alert('Ingresa el modelo y el precio de venta público.');
+        return;
+      }
+
+      let agregados = 0;
+
+      if (tipo === 'custom') {
+        const customTalla = document.getElementById('custom-talla-num').value.trim();
+        const customQty = parseInt(document.getElementById('custom-talla-qty').value) || 0;
+
+        if (!customTalla || customQty <= 0) {
+          alert('Ingresa la talla especial y la cantidad de pares.');
+          return;
+        }
+
+        productos.push({
+          id: 'prod_' + Date.now() + '_' + Math.floor(Math.random() * 10000),
+          codigo,
+          nombre,
+          talla: `Talla ${customTalla}`,
+          costo,
+          precio,
+          stock: customQty
+        });
+        agregados++;
+      } else {
+        const inputsTallas = document.querySelectorAll('.input-talla-stock');
+        inputsTallas.forEach((input, index) => {
+          const stock = parseInt(input.value) || 0;
+          const talla = input.getAttribute('data-talla');
+
+          if (stock > 0) {
+            const existe = productos.find(p => p.codigo === codigo && p.talla === `Talla ${talla}`);
+            if (existe) {
+              existe.stock += stock;
+              existe.precio = precio;
+              existe.costo = costo;
+            } else {
+              productos.push({
+                id: 'prod_' + Date.now() + '_' + index + '_' + Math.floor(Math.random() * 1000),
+                codigo,
+                nombre,
+                talla: `Talla ${talla}`,
+                costo,
+                precio,
+                stock
+              });
+            }
+            agregados++;
+          }
+        });
+      }
+
+      if (agregados === 0) {
+        alert('Ingresa la cantidad de pares disponibles en al menos una talla.');
+        return;
+      }
+
+      guardarLocalStorage();
+      
+      document.getElementById('prod-codigo').value = '';
+      document.getElementById('prod-nombre').value = '';
+      document.getElementById('prod-costo').value = '';
+      document.getElementById('prod-precio').value = '';
+      generarCamposTallas();
+      toggleFormProducto();
+      
+      init();
+      alert(`¡Éxito! Se registraron las tallas para ${nombre} (Código: #${codigo}).`);
+    }
+
+    function renderDashboard() {
+      const totalProds = productos.length;
+      const totalUnits = productos.reduce((acc, p) => acc + Number(p.stock), 0);
+      const lowStock = productos.filter(p => p.stock <= 2);
+      const ventasHoy = ventas.reduce((acc, v) => acc + Number(v.total), 0);
+      const devsPendientes = devoluciones.filter(d => !d.reintegrado).length;
+
+      document.getElementById('dash-total-prods').innerText = totalProds;
+      document.getElementById('dash-total-units').innerText = totalUnits;
+      document.getElementById('dash-ventas-hoy').innerText = `$${ventasHoy.toLocaleString('es-CO')}`;
+      document.getElementById('dash-dev-pendientes').innerText = devsPendientes;
+
+      const alertTitle = document.getElementById('dash-alert-title');
+      const alertList = document.getElementById('dash-alert-list');
+
+      if (productos.length === 0) {
+        alertTitle.className = "text-sm font-bold text-slate-300 flex items-center space-x-2";
+        alertTitle.innerHTML = `<i class="fa-solid fa-boxes-stacked text-slate-400"></i><span>Inventario Vacío</span>`;
+        alertList.innerHTML = `<p class="text-slate-400 font-normal">Aún no has ingresado zapatillas al stock. Haz clic en "Ver / Agregar Stock" para registrar la primera referencia.</p>`;
+      } else if (lowStock.length === 0) {
+        alertTitle.className = "text-sm font-bold text-emerald-400 flex items-center space-x-2";
+        alertTitle.innerHTML = `<i class="fa-solid fa-circle-check"></i><span>Inventario en Buen Estado</span>`;
+        alertList.innerHTML = `<p class="text-slate-400 font-normal">Todas las referencias registradas cuentan con suficiente disponibilidad de pares 👍</p>`;
+      } else {
+        alertTitle.className = "text-sm font-bold text-amber-400 flex items-center space-x-2";
+        alertTitle.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-amber-500"></i><span>⚠️ Alerta: Inventario Bajo / Agotado</span>`;
+        alertList.innerHTML = lowStock.map(p => `
+          <div class="flex justify-between items-center bg-amber-950/30 p-2.5 rounded-lg border border-amber-800/40">
+            <div>
+              <span class="font-bold font-mono text-xs bg-slate-700 text-slate-200 px-1.5 py-0.5 rounded mr-1">#${p.codigo || 'S/C'}</span>
+              <span class="font-semibold text-slate-200">${p.nombre}</span>
+              <span class="text-slate-400 font-normal">(${p.talla})</span>
+            </div>
+            <span class="font-bold ${p.stock === 0 ? 'text-red-400 bg-red-950/50 px-2 py-0.5 rounded' : 'text-amber-400'}">
+              ${p.stock === 0 ? '¡Agotado! (0 pares)' : `${p.stock} pares restantes`}
+            </span>
+          </div>
+        `).join('');
+      }
+    }
+
+    function renderInventario() {
+      const search = document.getElementById('search-inventory').value.toLowerCase().trim();
+      const tbody = document.getElementById('inventory-table-body');
+      
+      const filtered = productos.filter(p => 
+        (p.codigo && p.codigo.toLowerCase().includes(search)) ||
+        p.nombre.toLowerCase().includes(search) || 
+        p.talla.toLowerCase().includes(search)
+      );
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-slate-500 font-medium">No se encontraron zapatillas con ese criterio de búsqueda.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = filtered.map(p => `
+        <tr class="hover:bg-slate-700/40 transition-colors">
+          <td class="p-3 font-mono font-bold text-emerald-400">#${p.codigo || '0000'}</td>
+          <td class="p-3 font-semibold text-slate-100">${p.nombre}</td>
+          <td class="p-3"><span class="bg-slate-700 text-slate-300 px-2 py-0.5 rounded text-[10px] font-medium">${p.talla}</span></td>
+          <td class="p-3 text-right font-medium">$${Number(p.precio).toLocaleString('es-CO')}</td>
+          <td class="p-3 text-center">
+            <span class="font-bold ${p.stock === 0 ? 'text-red-400 bg-red-950/40 px-2 py-0.5 rounded' : p.stock <= 2 ? 'text-amber-400 bg-amber-950/40 px-2 py-0.5 rounded' : 'text-slate-300'}">${p.stock}</span>
+          </td>
+          <td class="p-3 text-center space-x-1">
+            <button onclick="venderDirecto('${p.id}')" title="Registrar Venta Directa" class="bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-1 rounded text-[11px] font-medium transition-colors">
+              <i class="fa-solid fa-cart-shopping mr-1"></i>Vender
+            </button>
+            <button onclick="eliminarProducto('${p.id}')" title="Eliminar" class="text-slate-400 hover:text-red-400 p-1"><i class="fa-regular fa-trash-can"></i></button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function toggleFormProducto() {
+      document.getElementById('form-producto').classList.toggle('hidden');
+    }
+
+    function venderDirecto(id) {
+      const prod = productos.find(p => p.id === id);
+      if (!prod) return;
+
+      if (prod.stock <= 0) {
+        alert('Esta zapatilla no tiene pares disponibles en stock.');
+        return;
+      }
+
+      const cantStr = prompt(`Registrar venta de:\n#${prod.codigo} - ${prod.nombre} (${prod.talla})\nStock disponible: ${prod.stock} pares\n\n¿Cuántos pares vas a vender?`, "1");
+      if (!cantStr) return;
+
+      const cant = parseInt(cantStr);
+      if (isNaN(cant) || cant <= 0) {
+        alert('Cantidad inválida.');
+        return;
+      }
+
+      if (cant > prod.stock) {
+        alert(`No puedes vender ${cant} pares porque solo hay ${prod.stock} disponibles en stock.`);
+        return;
+      }
+
+      prod.stock -= cant;
+      const totalVenta = prod.precio * cant;
+
+      ventas.unshift({
+        id: 'sale_' + Date.now(),
+        productoId: prod.id,
+        codigo: prod.codigo,
+        nombre: prod.nombre,
+        talla: prod.talla,
+        cantidad: cant,
+        precioUnitario: prod.precio,
+        fecha: obtenerFechaFormateada(),
+        concepto: `[#${prod.codigo}] ${prod.nombre} (${prod.talla}) x${cant} par(es)`,
+        total: totalVenta
+      });
+
+      guardarLocalStorage();
+      init();
+      alert(`✅ Venta registrada exitosamente. $${totalVenta.toLocaleString('es-CO')} ingresados.`);
+    }
+
+    function renderVentas() {
+      const tbody = document.getElementById('sales-table-body');
+      if (ventas.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-slate-500 font-medium">No hay ventas registradas todavía.</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = ventas.map((v, idx) => `
+        <tr class="hover:bg-slate-700/40">
+          <td class="p-3 text-slate-500 font-mono text-[11px]">${v.fecha}</td>
+          <td class="p-3 font-medium text-slate-200">${v.concepto}</td>
+          <td class="p-3 text-right font-bold text-emerald-400">$${Number(v.total).toLocaleString('es-CO')}</td>
+          <td class="p-3 text-center">
+            <button onclick="procesarDevolucion(${idx})" title="Devolver Par al Inventario" class="bg-amber-600/80 hover:bg-amber-600 text-white px-2 py-1 rounded text-[11px] font-medium transition-colors">
+              <i class="fa-solid fa-rotate-left mr-1"></i>Devolver
+            </button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function procesarDevolucion(index) {
+      const v = ventas[index];
+      if (!v) return;
+
+      const motivo = prompt(`Devolución de la venta:\n${v.concepto}\n\nIngresa la razón de la devolución (ej: "Cliente no regresó por el pedido", "Cambio por garantía"):`, "Cliente no regresó por el pedido");
+      if (motivo === null) return;
+
+      devoluciones.unshift({
+        id: 'dev_' + Date.now(),
+        codigo: v.codigo,
+        nombre: v.nombre,
+        talla: v.talla,
+        cantidad: v.cantidad || 1,
+        precioUnitario: v.precioUnitario || (v.total / (v.cantidad || 1)),
+        total: v.total,
+        motivo: motivo || "Sin especificar",
+        fechaDevolucion: obtenerFechaFormateada(),
+        reintegrado: false
+      });
+
+      ventas.splice(index, 1);
+
+      guardarLocalStorage();
+      init();
+      alert(`↩️ Devolución enviada a la pestaña "Devoluciones". Recuerda hacer clic en "Reintegrar al Stock".`);
+    }
+
+    function renderDevoluciones() {
+      const tbody = document.getElementById('returns-table-body');
+      if (devoluciones.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-slate-500 font-medium">No hay devoluciones registradas por el momento.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = devoluciones.map((d, idx) => `
+        <tr class="hover:bg-slate-700/40">
+          <td class="p-3 text-slate-500 font-mono text-[11px]">${d.fechaDevolucion}</td>
+          <td class="p-3 font-medium text-slate-200">[#${d.codigo || '0000'}] ${d.nombre} (${d.talla}) - x${d.cantidad} par(es)</td>
+          <td class="p-3 text-slate-400 italic">${d.motivo}</td>
+          <td class="p-3 text-center">
+            ${d.reintegrado 
+              ? `<span class="bg-emerald-950/60 text-emerald-400 px-2 py-0.5 rounded text-[10px] font-bold">✅ Reintegrado</span>`
+              : `<span class="bg-amber-950/60 text-amber-400 px-2 py-0.5 rounded text-[10px] font-bold">⏳ Pendiente</span>`
+            }
+          </td>
+          <td class="p-3 text-center">
+            ${!d.reintegrado ? `
+              <button onclick="reintegrarAlStock(${idx})" title="Reintegrar par al inventario" class="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 rounded text-[11px] font-bold transition-colors">
+                <i class="fa-solid fa-box-archive mr-1"></i>Reintegrar al Stock
+              </button>
+            ` : `<span class="text-slate-500 text-[11px]">En Inventario</span>`}
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function reintegrarAlStock(index) {
+      const d = devoluciones[index];
+      if (!d) return;
+
+      let prod = productos.find(p => p.codigo === d.codigo && p.talla === d.talla);
+
+      if (prod) {
+        prod.stock += d.cantidad;
+      } else {
+        productos.push({
+          id: 'prod_' + Date.now(),
+          codigo: d.codigo,
+          nombre: d.nombre,
+          talla: d.talla,
+          costo: 0,
+          precio: d.precioUnitario || 0,
+          stock: d.cantidad
+        });
+      }
+
+      d.reintegrado = true;
+
+      guardarLocalStorage();
+      init();
+      alert(`📦 ¡Éxito! ${d.cantidad} par(es) de [#${d.codigo}] ${d.nombre} (${d.talla}) han sido reintegrados al stock.`);
+    }
+
+    function eliminarProducto(id) {
+      if (confirm('¿Eliminar esta talla/referencia del inventario?')) {
+        productos = productos.filter(p => p.id !== id);
+        guardarLocalStorage();
+        init();
+      }
+    }
+
+    function exportarCSV() {
+      if (ventas.length === 0) {
+        alert('No hay datos de ventas para exportar.');
+        return;
+      }
+      let csv = 'Fecha,Detalle,Total\n';
+      ventas.forEach(v => {
+        csv += `"${v.fecha}","${v.concepto}",${v.total}\n`;
+      });
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.setAttribute('href', url);
+      a.setAttribute('download', 'Ventas_Vitrina.csv');
+      a.click();
+    }
+
+    function guardarLocalStorage() {
+      localStorage.setItem(KEY_PRODS, JSON.stringify(productos));
+      localStorage.setItem(KEY_VENTAS, JSON.stringify(ventas));
+      localStorage.setItem(KEY_DEVS, JSON.stringify(devoluciones));
+    }
+
+    function resetAppClean() {
+      if (confirm('¿Estás seguro de borrar todo el inventario, ventas y devoluciones para dejar el sistema en cero?')) {
+        localStorage.removeItem(KEY_PRODS);
+        localStorage.removeItem(KEY_VENTAS);
+        localStorage.removeItem(KEY_DEVS);
+        productos = [];
+        ventas = [];
+        devoluciones = [];
+        init();
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>
