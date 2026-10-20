@@ -10,291 +10,416 @@
 
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <!-- MÓDULOS DE FIREBASE (v10) -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { 
+      getAuth, 
+      signInWithEmailAndPassword, 
+      createUserWithEmailAndPassword, 
+      signOut, 
+      onAuthStateChanged 
+    } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+    import { 
+      getFirestore, 
+      collection, 
+      doc, 
+      setDoc, 
+      getDocs, 
+      deleteDoc, 
+      onSnapshot,
+      query,
+      where
+    } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+    // 🔴 CONFIGURACIÓN DE TU PROYECTO FIREBASE
+    // Reemplaza estos valores con los de tu consola de Firebase
+    const firebaseConfig = {
+  apiKey: "AIzaSyCVyG2UTL7fLXiJJSIvEvYVZzPB5668r8Y",
+  authDomain: "vitrinaapp-9da79.firebaseapp.com",
+  projectId: "vitrinaapp-9da79",
+  storageBucket: "vitrinaapp-9da79.firebasestorage.app",
+  messagingSenderId: "527745205282",
+  appId: "1:527745205282:web:d2209db8bc5fa9d892367b",
+  measurementId: "G-ZNRW9VFE0L"
+};
+
+    // Inicializar Firebase
+    let app, auth, db;
+    try {
+      app = initializeApp(firebaseConfig);
+      auth = getAuth(app);
+      db = getFirestore(app);
+      window.firebaseAuth = auth;
+      window.firebaseDb = db;
+      window.isFirebaseActive = true;
+    } catch (e) {
+      console.warn("Firebase no está configurado aún o faltan credenciales. Se usará el modo LocalStorage temporal.");
+      window.isFirebaseActive = false;
+    }
+
+    // Exponer funciones globales para Auth
+    window.fnLogin = async (email, password) => {
+      if (!window.isFirebaseActive) return false;
+      return await signInWithEmailAndPassword(auth, email, password);
+    };
+
+    window.fnRegister = async (email, password) => {
+      if (!window.isFirebaseActive) return false;
+      return await createUserWithEmailAndPassword(auth, email, password);
+    };
+
+    window.fnLogout = async () => {
+      if (window.isFirebaseActive) await signOut(auth);
+      localStorage.removeItem('vitrina_session_user');
+      location.reload();
+    };
+
+    // Escuchar cambios de estado de autenticación
+    if (window.isFirebaseActive) {
+      onAuthStateChanged(auth, (user) => {
+        if (user) {
+          window.currentUser = user;
+          document.getElementById('auth-modal').classList.add('hidden');
+          document.getElementById('app-content').classList.remove('hidden');
+          document.getElementById('user-email-display').innerText = user.email;
+          if (window.syncDataFromCloud) window.syncDataFromCloud(user.uid);
+        } else {
+          window.currentUser = null;
+          document.getElementById('auth-modal').classList.remove('hidden');
+          document.getElementById('app-content').classList.add('hidden');
+        }
+      });
+    }
+  </script>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen font-sans antialiased pb-28 md:pb-12 md:pt-20 flex flex-col justify-between">
 
-  <!-- Header Superior -->
-  <header class="fixed top-0 left-0 right-0 bg-slate-800 border-b border-slate-700 z-40 px-4 py-3 flex items-center justify-between shadow-md">
-    <!-- Logo -->
-    <div class="flex items-center space-x-3">
-      <div class="w-9 h-9 bg-emerald-600 text-white rounded-xl flex items-center justify-center font-bold text-lg shadow-md shadow-emerald-600/30">
-        <i class="fa-solid fa-shoe-prints text-sm"></i>
+  <!-- MODAL / PANTALLA DE INICIO DE SESIÓN & REGISTRO -->
+  <div id="auth-modal" class="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-50 flex items-center justify-center p-4">
+    <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 md:p-8 max-w-md w-full shadow-2xl space-y-6">
+      
+      <!-- Encabezado Modal -->
+      <div class="text-center space-y-2">
+        <div class="w-12 h-12 bg-emerald-600 text-white rounded-2xl flex items-center justify-center font-bold text-2xl mx-auto shadow-lg shadow-emerald-600/30">
+          <i class="fa-solid fa-shoe-prints"></i>
+        </div>
+        <h2 id="auth-title" class="text-2xl font-bold text-white">Iniciar Sesión en Vitrina</h2>
+        <p id="auth-subtitle" class="text-xs text-slate-400">Ingresa tus credenciales para acceder a tu bodega sincronizada</p>
       </div>
-      <div>
-        <h1 class="text-lg font-bold tracking-tight text-emerald-400 leading-none">Vit<span class="text-white">rina</span></h1>
-        <p class="text-[10px] text-slate-400 font-medium mt-0.5">Control Comercial & Devoluciones</p>
+
+      <!-- Formulario Auth -->
+      <form onsubmit="handleAuthSubmit(event)" class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Correo Electrónico</label>
+          <div class="relative">
+            <i class="fa-solid fa-envelope absolute left-3 top-3 text-slate-500 text-xs"></i>
+            <input type="email" id="auth-email" required placeholder="tu-correo@ejemplo.com" class="w-full pl-9 pr-3 py-2.5 bg-slate-700 text-white border border-slate-600 rounded-xl text-xs focus:border-emerald-500 focus:outline-none">
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Contraseña</label>
+          <div class="relative">
+            <i class="fa-solid fa-lock absolute left-3 top-3 text-slate-500 text-xs"></i>
+            <input type="password" id="auth-password" required minlength="6" placeholder="••••••••" class="w-full pl-9 pr-3 py-2.5 bg-slate-700 text-white border border-slate-600 rounded-xl text-xs focus:border-emerald-500 focus:outline-none">
+          </div>
+        </div>
+
+        <button type="submit" id="auth-btn-submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl text-xs shadow-lg shadow-emerald-600/20 transition-all flex items-center justify-center space-x-2">
+          <span>Ingresar a la Bodega</span>
+          <i class="fa-solid fa-arrow-right text-xs"></i>
+        </button>
+      </form>
+
+      <!-- Alternar Registro / Login -->
+      <div class="text-center pt-2 border-t border-slate-700/60 text-xs">
+        <p id="auth-toggle-text" class="text-slate-400">
+          ¿No tienes una cuenta aún? 
+          <button type="button" onclick="toggleAuthMode()" class="text-emerald-400 hover:underline font-bold ml-1">Regístrate aquí</button>
+        </p>
       </div>
     </div>
+  </div>
 
-    <!-- Navegación Escritorio -->
-    <nav class="hidden md:flex items-center space-x-1 bg-slate-700/60 p-1 rounded-xl border border-slate-600">
-      <button onclick="switchTab('dashboard')" id="nav-desk-dashboard" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-emerald-400 shadow-sm transition-all">
-        <i class="fa-solid fa-chart-pie"></i>
-        <span>Inicio</span>
+  <!-- CONTENIDO DE LA APLICACIÓN (Oculto hasta autenticarse) -->
+  <div id="app-content" class="hidden flex-grow flex flex-col justify-between">
+    
+    <!-- Header Superior -->
+    <header class="fixed top-0 left-0 right-0 bg-slate-800 border-b border-slate-700 z-40 px-4 py-3 flex items-center justify-between shadow-md">
+      <!-- Logo -->
+      <div class="flex items-center space-x-3">
+        <div class="w-9 h-9 bg-emerald-600 text-white rounded-xl flex items-center justify-center font-bold text-lg shadow-md shadow-emerald-600/30">
+          <i class="fa-solid fa-shoe-prints text-sm"></i>
+        </div>
+        <div>
+          <h1 class="text-lg font-bold tracking-tight text-emerald-400 leading-none">Vit<span class="text-white">rina</span></h1>
+          <p class="text-[10px] text-slate-400 font-medium mt-0.5">Control Comercial & Devoluciones</p>
+        </div>
+      </div>
+
+      <!-- Navegación Escritorio -->
+      <nav class="hidden md:flex items-center space-x-1 bg-slate-700/60 p-1 rounded-xl border border-slate-600">
+        <button onclick="switchTab('dashboard')" id="nav-desk-dashboard" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-emerald-400 shadow-sm transition-all">
+          <i class="fa-solid fa-chart-pie"></i>
+          <span>Inicio</span>
+        </button>
+        <button onclick="switchTab('inventario')" id="nav-desk-inventario" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition-all">
+          <i class="fa-solid fa-shoe-prints"></i>
+          <span>Stock</span>
+        </button>
+        <button onclick="switchTab('caja')" id="nav-desk-caja" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition-all">
+          <i class="fa-solid fa-receipt"></i>
+          <span>Ventas</span>
+        </button>
+        <button onclick="switchTab('devoluciones')" id="nav-desk-devoluciones" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition-all">
+          <i class="fa-solid fa-rotate-left"></i>
+          <span>Devoluciones</span>
+        </button>
+      </nav>
+      
+      <!-- Usuario Activo y Salir -->
+      <div class="flex items-center space-x-2">
+        <span id="user-email-display" class="hidden sm:inline text-[11px] text-slate-400 font-mono bg-slate-700/60 px-2 py-1 rounded-lg"></span>
+        <button onclick="window.fnLogout()" title="Cerrar Sesión" class="p-2 text-slate-400 hover:text-red-400 rounded-lg hover:bg-slate-700 transition-colors">
+          <i class="fa-solid fa-right-from-bracket text-sm"></i>
+        </button>
+      </div>
+    </header>
+
+    <!-- Layout Principal -->
+    <main class="max-w-4xl mx-auto px-4 pt-16 md:pt-4 w-full flex-grow">
+
+      <!-- SECCIÓN 1: DASHBOARD -->
+      <section id="sec-dashboard" class="space-y-4 py-4">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-xl font-bold text-white">Resumen Comercial</h2>
+            <p class="text-xs text-slate-400">Control de ventas, stock y devoluciones en tiempo real</p>
+          </div>
+        </div>
+
+        <!-- Tarjetas de Métricas -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-sm">
+            <p class="text-xs font-medium text-slate-400 mb-1">Total Referencias</p>
+            <p id="dash-total-prods" class="text-2xl font-bold text-white">0</p>
+          </div>
+          <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-sm">
+            <p class="text-xs font-medium text-slate-400 mb-1">Pares en Stock</p>
+            <p id="dash-total-units" class="text-2xl font-bold text-white">0</p>
+          </div>
+          <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-sm">
+            <p class="text-xs font-medium text-slate-400 mb-1">Ventas Registradas</p>
+            <p id="dash-ventas-hoy" class="text-2xl font-bold text-emerald-400">$0</p>
+          </div>
+          <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-sm">
+            <p class="text-xs font-medium text-slate-400 mb-1">Devoluciones Pendientes</p>
+            <p id="dash-dev-pendientes" class="text-2xl font-bold text-amber-500">0</p>
+          </div>
+        </div>
+
+        <!-- Acciones Rápidas -->
+        <div class="grid grid-cols-2 gap-3 pt-2">
+          <button onclick="switchTab('inventario')" class="flex items-center justify-center space-x-2 bg-emerald-600 hover:bg-emerald-700 text-white p-3.5 rounded-xl font-semibold shadow-lg shadow-emerald-600/20 transition-all">
+            <i class="fa-solid fa-shoe-prints text-lg"></i>
+            <span class="text-sm">Ver / Agregar Stock</span>
+          </button>
+          <button onclick="switchTab('caja')" class="flex items-center justify-center space-x-2 bg-slate-700 hover:bg-slate-600 text-white p-3.5 rounded-xl font-semibold shadow-md transition-all">
+            <i class="fa-solid fa-receipt text-sm"></i>
+            <span class="text-sm">Ver Ventas & Devolver</span>
+          </button>
+        </div>
+
+        <!-- Estado / Alertas de Inventario Dinámicas -->
+        <div class="bg-slate-800 rounded-xl border border-slate-700 p-4 shadow-sm space-y-3">
+          <h3 id="dash-alert-title" class="text-sm font-bold flex items-center space-x-2"></h3>
+          <div id="dash-alert-list" class="space-y-2 text-xs"></div>
+        </div>
+      </section>
+
+      <!-- SECCIÓN 2: INVENTARIO (STOCK) -->
+      <section id="sec-inventario" class="space-y-4 py-4 hidden">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-xl font-bold text-white">Inventario de Zapatillas</h2>
+            <p class="text-xs text-slate-400">Administra códigos, modelos, curvas de tallas y ventas en directo</p>
+          </div>
+          <button onclick="toggleFormProducto()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-2 rounded-lg font-medium flex items-center space-x-1">
+            <i class="fa-solid fa-plus"></i>
+            <span>Nueva Zapatilla</span>
+          </button>
+        </div>
+
+        <!-- Formulario Multitalla -->
+        <div id="form-producto" class="hidden bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-md space-y-4">
+          <h3 class="text-sm font-bold text-white border-b border-slate-700 pb-2">Registrar Modelo y Curva de Tallas</h3>
+          
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+            <div>
+              <label class="block font-semibold text-slate-300 mb-1">Código de 4 Dígitos</label>
+              <input type="text" id="prod-codigo" maxlength="4" placeholder="Ej: 3954" class="w-full p-2 bg-slate-700 text-white border border-slate-600 rounded-lg font-mono uppercase">
+            </div>
+            <div>
+              <label class="block font-semibold text-slate-300 mb-1">Modelo / Referencia</label>
+              <input type="text" id="prod-nombre" placeholder="Ej: NIKE AF1 DAMA" class="w-full p-2 bg-slate-700 text-white border border-slate-600 rounded-lg">
+            </div>
+            <div>
+              <label class="block font-semibold text-slate-300 mb-1">Tipo de Tallaje / Curva</label>
+              <select id="prod-tipo-talla" onchange="generarCamposTallas()" class="w-full p-2 bg-slate-700 text-white border border-slate-600 rounded-lg font-medium">
+                <option value="dama">Curva Dama (36 al 39)</option>
+                <option value="caballero">Curva Caballero (40 al 44)</option>
+                <option value="custom">Personalizado / Talla Especial</option>
+              </select>
+            </div>
+            <div>
+              <label class="block font-semibold text-slate-300 mb-1">Costo Compra ($)</label>
+              <input type="number" id="prod-costo" placeholder="0" class="w-full p-2 bg-slate-700 text-white border border-slate-600 rounded-lg">
+            </div>
+            <div>
+              <label class="block font-semibold text-slate-300 mb-1">Precio Venta Público ($)</label>
+              <input type="number" id="prod-precio" placeholder="0" class="w-full p-2 bg-slate-700 text-white border border-slate-600 rounded-lg">
+            </div>
+          </div>
+
+          <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-700/80 space-y-2">
+            <p class="text-xs font-bold text-emerald-400">Pares Disponibles por Talla:</p>
+            <div id="contenedor-tallas" class="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs"></div>
+          </div>
+
+          <div class="flex justify-end space-x-2 pt-2">
+            <button onclick="toggleFormProducto()" class="px-3 py-1.5 text-xs text-slate-400 font-medium">Cancelar</button>
+            <button onclick="guardarProductoMultitalla()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-4 py-1.5 rounded-lg font-semibold">Guardar Referencia</button>
+          </div>
+        </div>
+
+        <!-- Tabla de Productos -->
+        <div class="bg-slate-800 rounded-xl border border-slate-700 shadow-sm overflow-hidden">
+          <div class="p-3 border-b border-slate-700 bg-slate-800/50 flex items-center justify-between">
+            <input type="text" id="search-inventory" onkeyup="renderInventario()" placeholder="🔍 Buscar por Código (4 dígitos) o Modelo..." class="text-xs p-2 bg-slate-700 text-white border border-slate-600 rounded-lg w-full max-w-sm">
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs text-slate-300">
+              <thead class="bg-slate-700/50 text-slate-400 uppercase font-semibold border-b border-slate-700">
+                <tr>
+                  <th class="p-3">Código</th>
+                  <th class="p-3">Modelo</th>
+                  <th class="p-3">Talla</th>
+                  <th class="p-3 text-right">Precio Venta</th>
+                  <th class="p-3 text-center">Stock</th>
+                  <th class="p-3 text-center">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="inventory-table-body" class="divide-y divide-slate-700"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECCIÓN 3: REGISTRO DE VENTAS -->
+      <section id="sec-caja" class="space-y-4 py-4 hidden">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-xl font-bold text-white">Registro de Ventas</h2>
+            <p class="text-xs text-slate-400">Historial de ventas. Utiliza el botón "Devolver" si el cliente no regresó por el pedido</p>
+          </div>
+          <button onclick="exportarCSV()" class="bg-slate-700 hover:bg-slate-600 text-white text-xs px-3 py-2 rounded-lg font-medium flex items-center space-x-1">
+            <i class="fa-solid fa-file-csv"></i>
+            <span>Exportar CSV</span>
+          </button>
+        </div>
+
+        <div class="bg-slate-800 rounded-xl border border-slate-700 shadow-sm overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs text-slate-300">
+              <thead class="bg-slate-700/50 text-slate-400 uppercase font-semibold border-b border-slate-700">
+                <tr>
+                  <th class="p-3">Fecha</th>
+                  <th class="p-3">Detalle de Zapatillas</th>
+                  <th class="p-3 text-right">Total</th>
+                  <th class="p-3 text-center">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="sales-table-body" class="divide-y divide-slate-700"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECCIÓN 4: DEVOLUCIONES -->
+      <section id="sec-devoluciones" class="space-y-4 py-4 hidden">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-xl font-bold text-white">Devoluciones & Reintegro</h2>
+            <p class="text-xs text-slate-400">Pares devueltos por clientes. Reintégralos al stock con un solo clic</p>
+          </div>
+        </div>
+
+        <div class="bg-slate-800 rounded-xl border border-slate-700 shadow-sm overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs text-slate-300">
+              <thead class="bg-slate-700/50 text-slate-400 uppercase font-semibold border-b border-slate-700">
+                <tr>
+                  <th class="p-3">Fecha Devolución</th>
+                  <th class="p-3">Detalle / Zapato</th>
+                  <th class="p-3">Motivo / Razón</th>
+                  <th class="p-3 text-center">Estado Stock</th>
+                  <th class="p-3 text-center">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="returns-table-body" class="divide-y divide-slate-700"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- FOOTER CON AUTORÍA -->
+    <footer class="mt-8 border-t border-slate-800 py-6 px-4 bg-slate-900/80 text-center text-xs text-slate-500">
+      <div class="max-w-4xl mx-auto flex flex-col md:flex-row items-center justify-between gap-3">
+        <div class="flex items-center space-x-2">
+          <span class="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+          <span class="font-medium text-slate-400">Vitrina v1.0 • Sistema de Bodega</span>
+        </div>
+        <div>
+          <span>Diseñado & Desarrollado por </span>
+          <strong class="text-emerald-400 font-bold">KJ Sneakers</strong>
+        </div>
+        <div class="flex items-center space-x-3">
+          <a href="https://wa.me/573000000000?text=Hola,%20requiero%20soporte%20sobre%20el%20sistema%20Vitrina" target="_blank" class="text-slate-400 hover:text-emerald-400 transition-colors flex items-center space-x-1">
+            <i class="fa-brands fa-whatsapp text-sm"></i>
+            <span>Contacto / Soporte</span>
+          </a>
+        </div>
+      </div>
+    </footer>
+
+    <!-- Navegación Inferior (Móvil) -->
+    <nav class="md:hidden fixed bottom-0 left-0 right-0 bg-slate-800 border-t border-slate-700 z-40 flex justify-around py-2 shadow-lg">
+      <button onclick="switchTab('dashboard')" id="nav-mob-dashboard" class="flex flex-col items-center text-emerald-400 px-3 py-1">
+        <i class="fa-solid fa-chart-pie text-base"></i>
+        <span class="text-[10px] font-medium mt-1">Inicio</span>
       </button>
-      <button onclick="switchTab('inventario')" id="nav-desk-inventario" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition-all">
-        <i class="fa-solid fa-shoe-prints"></i>
-        <span>Stock</span>
+      <button onclick="switchTab('inventario')" id="nav-mob-inventario" class="flex flex-col items-center text-slate-500 hover:text-slate-300 px-3 py-1">
+        <i class="fa-solid fa-shoe-prints text-base"></i>
+        <span class="text-[10px] font-medium mt-1">Stock</span>
       </button>
-      <button onclick="switchTab('caja')" id="nav-desk-caja" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition-all">
-        <i class="fa-solid fa-receipt"></i>
-        <span>Ventas</span>
+      <button onclick="switchTab('caja')" id="nav-mob-caja" class="flex flex-col items-center text-slate-500 hover:text-slate-300 px-3 py-1">
+        <i class="fa-solid fa-receipt text-base"></i>
+        <span class="text-[10px] font-medium mt-1">Ventas</span>
       </button>
-      <button onclick="switchTab('devoluciones')" id="nav-desk-devoluciones" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition-all">
-        <i class="fa-solid fa-rotate-left"></i>
-        <span>Devoluciones</span>
+      <button onclick="switchTab('devoluciones')" id="nav-mob-devoluciones" class="flex flex-col items-center text-slate-500 hover:text-slate-300 px-3 py-1">
+        <i class="fa-solid fa-rotate-left text-base"></i>
+        <span class="text-[10px] font-medium mt-1">Devolución</span>
       </button>
     </nav>
-    
-    <!-- Limpieza -->
-    <button onclick="resetAppClean()" title="Limpiar Todo" class="p-2 text-slate-400 hover:text-red-400 rounded-lg hover:bg-slate-700 transition-colors">
-      <i class="fa-solid fa-trash-can text-sm"></i>
-    </button>
-  </header>
+  </div>
 
-  <!-- Layout Principal -->
-  <main class="max-w-4xl mx-auto px-4 pt-16 md:pt-4 w-full flex-grow">
-
-    <!-- SECCIÓN 1: DASHBOARD -->
-    <section id="sec-dashboard" class="space-y-4 py-4">
-      <div class="flex items-center justify-between">
-        <div>
-          <h2 class="text-xl font-bold text-white">Resumen Comercial</h2>
-          <p class="text-xs text-slate-400">Control de ventas, stock y devoluciones en tiempo real</p>
-        </div>
-      </div>
-
-      <!-- Tarjetas de Métricas -->
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-sm">
-          <p class="text-xs font-medium text-slate-400 mb-1">Total Referencias</p>
-          <p id="dash-total-prods" class="text-2xl font-bold text-white">0</p>
-        </div>
-        <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-sm">
-          <p class="text-xs font-medium text-slate-400 mb-1">Pares en Stock</p>
-          <p id="dash-total-units" class="text-2xl font-bold text-white">0</p>
-        </div>
-        <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-sm">
-          <p class="text-xs font-medium text-slate-400 mb-1">Ventas Registradas</p>
-          <p id="dash-ventas-hoy" class="text-2xl font-bold text-emerald-400">$0</p>
-        </div>
-        <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-sm">
-          <p class="text-xs font-medium text-slate-400 mb-1">Devoluciones Pendientes</p>
-          <p id="dash-dev-pendientes" class="text-2xl font-bold text-amber-500">0</p>
-        </div>
-      </div>
-
-      <!-- Acciones Rápidas -->
-      <div class="grid grid-cols-2 gap-3 pt-2">
-        <button onclick="switchTab('inventario')" class="flex items-center justify-center space-x-2 bg-emerald-600 hover:bg-emerald-700 text-white p-3.5 rounded-xl font-semibold shadow-lg shadow-emerald-600/20 transition-all">
-          <i class="fa-solid fa-shoe-prints text-lg"></i>
-          <span class="text-sm">Ver / Agregar Stock</span>
-        </button>
-        <button onclick="switchTab('caja')" class="flex items-center justify-center space-x-2 bg-slate-700 hover:bg-slate-600 text-white p-3.5 rounded-xl font-semibold shadow-md transition-all">
-          <i class="fa-solid fa-receipt text-sm"></i>
-          <span class="text-sm">Ver Ventas & Devolver</span>
-        </button>
-      </div>
-
-      <!-- Estado / Alertas de Inventario Dinámicas -->
-      <div class="bg-slate-800 rounded-xl border border-slate-700 p-4 shadow-sm space-y-3">
-        <h3 id="dash-alert-title" class="text-sm font-bold flex items-center space-x-2">
-          <!-- Título dinámico -->
-        </h3>
-        <div id="dash-alert-list" class="space-y-2 text-xs">
-          <!-- Lista dinámica -->
-        </div>
-      </div>
-    </section>
-
-    <!-- SECCIÓN 2: INVENTARIO (STOCK) -->
-    <section id="sec-inventario" class="space-y-4 py-4 hidden">
-      <div class="flex items-center justify-between">
-        <div>
-          <h2 class="text-xl font-bold text-white">Inventario de Zapatillas</h2>
-          <p class="text-xs text-slate-400">Administra códigos, modelos, curvas de tallas y ventas en directo</p>
-        </div>
-        <button onclick="toggleFormProducto()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-2 rounded-lg font-medium flex items-center space-x-1">
-          <i class="fa-solid fa-plus"></i>
-          <span>Nueva Zapatilla</span>
-        </button>
-      </div>
-
-      <!-- Formulario Multitalla para Agregar Producto -->
-      <div id="form-producto" class="hidden bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-md space-y-4">
-        <h3 class="text-sm font-bold text-white border-b border-slate-700 pb-2">Registrar Modelo y Curva de Tallas</h3>
-        
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
-          <div>
-            <label class="block font-semibold text-slate-300 mb-1">Código de 4 Dígitos</label>
-            <input type="text" id="prod-codigo" maxlength="4" placeholder="Ej: 3954" class="w-full p-2 bg-slate-700 text-white border border-slate-600 rounded-lg font-mono uppercase">
-          </div>
-          <div>
-            <label class="block font-semibold text-slate-300 mb-1">Modelo / Referencia</label>
-            <input type="text" id="prod-nombre" placeholder="Ej: NIKE AF1 DAMA" class="w-full p-2 bg-slate-700 text-white border border-slate-600 rounded-lg">
-          </div>
-          <div>
-            <label class="block font-semibold text-slate-300 mb-1">Tipo de Tallaje / Curva</label>
-            <select id="prod-tipo-talla" onchange="generarCamposTallas()" class="w-full p-2 bg-slate-700 text-white border border-slate-600 rounded-lg font-medium">
-              <option value="dama">Curva Dama (36 al 39)</option>
-              <option value="caballero">Curva Caballero (40 al 44)</option>
-              <option value="custom">Personalizado / Talla Especial</option>
-            </select>
-          </div>
-          <div>
-            <label class="block font-semibold text-slate-300 mb-1">Costo Compra ($)</label>
-            <input type="number" id="prod-costo" placeholder="0" class="w-full p-2 bg-slate-700 text-white border border-slate-600 rounded-lg">
-          </div>
-          <div>
-            <label class="block font-semibold text-slate-300 mb-1">Precio Venta Público ($)</label>
-            <input type="number" id="prod-precio" placeholder="0" class="w-full p-2 bg-slate-700 text-white border border-slate-600 rounded-lg">
-          </div>
-        </div>
-
-        <!-- Sección para ingresar Pares por Talla -->
-        <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-700/80 space-y-2">
-          <p class="text-xs font-bold text-emerald-400">Pares Disponibles por Talla:</p>
-          <div id="contenedor-tallas" class="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
-            <!-- Dinámico por JS -->
-          </div>
-        </div>
-
-        <div class="flex justify-end space-x-2 pt-2">
-          <button onclick="toggleFormProducto()" class="px-3 py-1.5 text-xs text-slate-400 font-medium">Cancelar</button>
-          <button onclick="guardarProductoMultitalla()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-4 py-1.5 rounded-lg font-semibold">Guardar Referencia</button>
-        </div>
-      </div>
-
-      <!-- Tabla de Productos -->
-      <div class="bg-slate-800 rounded-xl border border-slate-700 shadow-sm overflow-hidden">
-        <div class="p-3 border-b border-slate-700 bg-slate-800/50 flex items-center justify-between">
-          <input type="text" id="search-inventory" onkeyup="renderInventario()" placeholder="🔍 Buscar por Código (4 dígitos) o Modelo..." class="text-xs p-2 bg-slate-700 text-white border border-slate-600 rounded-lg w-full max-w-sm">
-        </div>
-        <div class="overflow-x-auto">
-          <table class="w-full text-left text-xs text-slate-300">
-            <thead class="bg-slate-700/50 text-slate-400 uppercase font-semibold border-b border-slate-700">
-              <tr>
-                <th class="p-3">Código</th>
-                <th class="p-3">Modelo</th>
-                <th class="p-3">Talla</th>
-                <th class="p-3 text-right">Precio Venta</th>
-                <th class="p-3 text-center">Stock</th>
-                <th class="p-3 text-center">Acciones</th>
-              </tr>
-            </thead>
-            <tbody id="inventory-table-body" class="divide-y divide-slate-700">
-              <!-- Dinámico -->
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </section>
-
-    <!-- SECCIÓN 3: REGISTRO DE VENTAS -->
-    <section id="sec-caja" class="space-y-4 py-4 hidden">
-      <div class="flex items-center justify-between">
-        <div>
-          <h2 class="text-xl font-bold text-white">Registro de Ventas</h2>
-          <p class="text-xs text-slate-400">Historial de ventas. Utiliza el botón "Devolver" si el cliente no regresó por el pedido</p>
-        </div>
-        <button onclick="exportarCSV()" class="bg-slate-700 hover:bg-slate-600 text-white text-xs px-3 py-2 rounded-lg font-medium flex items-center space-x-1">
-          <i class="fa-solid fa-file-csv"></i>
-          <span>Exportar CSV</span>
-        </button>
-      </div>
-
-      <div class="bg-slate-800 rounded-xl border border-slate-700 shadow-sm overflow-hidden">
-        <div class="overflow-x-auto">
-          <table class="w-full text-left text-xs text-slate-300">
-            <thead class="bg-slate-700/50 text-slate-400 uppercase font-semibold border-b border-slate-700">
-              <tr>
-                <th class="p-3">Fecha</th>
-                <th class="p-3">Detalle de Zapatillas</th>
-                <th class="p-3 text-right">Total</th>
-                <th class="p-3 text-center">Acciones</th>
-              </tr>
-            </thead>
-            <tbody id="sales-table-body" class="divide-y divide-slate-700">
-              <!-- Dinámico -->
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </section>
-
-    <!-- SECCIÓN 4: DEVOLUCIONES Y REINTEGRO AL STOCK -->
-    <section id="sec-devoluciones" class="space-y-4 py-4 hidden">
-      <div class="flex items-center justify-between">
-        <div>
-          <h2 class="text-xl font-bold text-white">Devoluciones & Reintegro</h2>
-          <p class="text-xs text-slate-400">Pares devueltos por clientes. Reintégralos al stock con un solo clic</p>
-        </div>
-      </div>
-
-      <div class="bg-slate-800 rounded-xl border border-slate-700 shadow-sm overflow-hidden">
-        <div class="overflow-x-auto">
-          <table class="w-full text-left text-xs text-slate-300">
-            <thead class="bg-slate-700/50 text-slate-400 uppercase font-semibold border-b border-slate-700">
-              <tr>
-                <th class="p-3">Fecha Devolución</th>
-                <th class="p-3">Detalle / Zapato</th>
-                <th class="p-3">Motivo / Razón</th>
-                <th class="p-3 text-center">Estado Stock</th>
-                <th class="p-3 text-center">Acciones</th>
-              </tr>
-            </thead>
-            <tbody id="returns-table-body" class="divide-y divide-slate-700">
-              <!-- Dinámico -->
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </section>
-
-  </main>
-
-  <!-- PIE DE PÁGINA / FOOTER CON CRÉDITOS -->
-  <footer class="mt-8 border-t border-slate-800 py-6 px-4 bg-slate-900/80 text-center text-xs text-slate-500">
-    <div class="max-w-4xl mx-auto flex flex-col md:flex-row items-center justify-between gap-3">
-      <div class="flex items-center space-x-2">
-        <span class="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-        <span class="font-medium text-slate-400">Vitrina v1.0 • Sistema de Bodega</span>
-      </div>
-      <div>
-        <span>Diseñado & Desarrollado por </span>
-        <strong class="text-emerald-400 font-bold">Juan David Lenis</strong>
-      </div>
-      <div class="flex items-center space-x-3">
-        <a href="https://wa.me/573181848375?text=Hola,%20requiero%20soporte%20sobre%20el%20sistema%20Vitrina" target="_blank" class="text-slate-400 hover:text-emerald-400 transition-colors flex items-center space-x-1">
-          <i class="fa-brands fa-whatsapp text-sm"></i>
-          <span>Contacto / Soporte</span>
-        </a>
-      </div>
-    </div>
-  </footer>
-
-  <!-- Navegación Inferior (Móvil) -->
-  <nav class="md:hidden fixed bottom-0 left-0 right-0 bg-slate-800 border-t border-slate-700 z-40 flex justify-around py-2 shadow-lg">
-    <button onclick="switchTab('dashboard')" id="nav-mob-dashboard" class="flex flex-col items-center text-emerald-400 px-3 py-1">
-      <i class="fa-solid fa-chart-pie text-base"></i>
-      <span class="text-[10px] font-medium mt-1">Inicio</span>
-    </button>
-    <button onclick="switchTab('inventario')" id="nav-mob-inventario" class="flex flex-col items-center text-slate-500 hover:text-slate-300 px-3 py-1">
-      <i class="fa-solid fa-shoe-prints text-base"></i>
-      <span class="text-[10px] font-medium mt-1">Stock</span>
-    </button>
-    <button onclick="switchTab('caja')" id="nav-mob-caja" class="flex flex-col items-center text-slate-500 hover:text-slate-300 px-3 py-1">
-      <i class="fa-solid fa-receipt text-base"></i>
-      <span class="text-[10px] font-medium mt-1">Ventas</span>
-    </button>
-    <button onclick="switchTab('devoluciones')" id="nav-mob-devoluciones" class="flex flex-col items-center text-slate-500 hover:text-slate-300 px-3 py-1">
-      <i class="fa-solid fa-rotate-left text-base"></i>
-      <span class="text-[10px] font-medium mt-1">Devolución</span>
-    </button>
-  </nav>
-
-  <!-- JAVASCRIPT -->
+  <!-- JAVASCRIPT DE LÓGICA DE APPLICACIÓN Y AUTH -->
   <script>
+    let isRegisterMode = false;
     const KEY_PRODS = 'vitrina_app_prods_v1';
     const KEY_VENTAS = 'vitrina_app_ventas_v1';
     const KEY_DEVS = 'vitrina_app_devs_v1';
@@ -302,6 +427,70 @@
     let productos = JSON.parse(localStorage.getItem(KEY_PRODS)) || [];
     let ventas = JSON.parse(localStorage.getItem(KEY_VENTAS)) || [];
     let devoluciones = JSON.parse(localStorage.getItem(KEY_DEVS)) || [];
+
+    function toggleAuthMode() {
+      isRegisterMode = !isRegisterMode;
+      const title = document.getElementById('auth-title');
+      const subtitle = document.getElementById('auth-subtitle');
+      const btn = document.getElementById('auth-btn-submit');
+      const toggleText = document.getElementById('auth-toggle-text');
+
+      if (isRegisterMode) {
+        title.innerText = "Crear Cuenta en Vitrina";
+        subtitle.innerText = "Crea tu usuario para sincronizar tu bodega entre tu PC y celular";
+        btn.innerHTML = `<span>Registrar mi Cuenta</span><i class="fa-solid fa-user-plus text-xs"></i>`;
+        toggleText.innerHTML = `¿Ya tienes cuenta activa? <button type="button" onclick="toggleAuthMode()" class="text-emerald-400 hover:underline font-bold ml-1">Inicia sesión aquí</button>`;
+      } else {
+        title.innerText = "Iniciar Sesión en Vitrina";
+        subtitle.innerText = "Ingresa tus credenciales para acceder a tu bodega sincronizada";
+        btn.innerHTML = `<span>Ingresar a la Bodega</span><i class="fa-solid fa-arrow-right text-xs"></i>`;
+        toggleText.innerHTML = `¿No tienes una cuenta aún? <button type="button" onclick="toggleAuthMode()" class="text-emerald-400 hover:underline font-bold ml-1">Regístrate aquí</button>`;
+      }
+    }
+
+    async function handleAuthSubmit(e) {
+      e.preventDefault();
+      const email = document.getElementById('auth-email').value.trim();
+      const pass = document.getElementById('auth-password').value.trim();
+
+      if (!email || !pass) return;
+
+      try {
+        if (isRegisterMode) {
+          if (window.isFirebaseActive) {
+            await window.fnRegister(email, pass);
+            alert("¡Cuenta creada con éxito! Bienvenido a Vitrina.");
+          } else {
+            localStorage.setItem('vitrina_session_user', email);
+            bypassAuthLocal(email);
+          }
+        } else {
+          if (window.isFirebaseActive) {
+            await window.fnLogin(email, pass);
+          } else {
+            localStorage.setItem('vitrina_session_user', email);
+            bypassAuthLocal(email);
+          }
+        }
+      } catch (err) {
+        alert("Error de acceso: " + (err.message || "Credenciales incorrectas"));
+      }
+    }
+
+    function bypassAuthLocal(email) {
+      document.getElementById('auth-modal').classList.add('hidden');
+      document.getElementById('app-content').classList.remove('hidden');
+      document.getElementById('user-email-display').innerText = email;
+      init();
+    }
+
+    // Comprobar sesión local si Firebase no está activo aún
+    window.addEventListener('DOMContentLoaded', () => {
+      const savedUser = localStorage.getItem('vitrina_session_user');
+      if (savedUser && !window.isFirebaseActive) {
+        bypassAuthLocal(savedUser);
+      }
+    });
 
     function obtenerFechaFormateada() {
       const now = new Date();
@@ -324,13 +513,11 @@
     function switchTab(tabId) {
       ['dashboard', 'inventario', 'caja', 'devoluciones'].forEach(id => {
         document.getElementById(`sec-${id}`).classList.add('hidden');
-        
         const mobNav = document.getElementById(`nav-mob-${id}`);
         if(mobNav) {
           mobNav.classList.remove('text-emerald-400');
           mobNav.classList.add('text-slate-500');
         }
-
         const deskNav = document.getElementById(`nav-desk-${id}`);
         if(deskNav) {
           deskNav.className = "flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition-all";
@@ -338,13 +525,11 @@
       });
 
       document.getElementById(`sec-${tabId}`).classList.remove('hidden');
-      
       const activeMobNav = document.getElementById(`nav-mob-${tabId}`);
       if(activeMobNav) {
         activeMobNav.classList.remove('text-slate-500');
         activeMobNav.classList.add('text-emerald-400');
       }
-
       const activeDeskNav = document.getElementById(`nav-desk-${tabId}`);
       if(activeDeskNav) {
         activeDeskNav.className = "flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-emerald-400 shadow-sm transition-all";
@@ -729,18 +914,6 @@
       localStorage.setItem(KEY_PRODS, JSON.stringify(productos));
       localStorage.setItem(KEY_VENTAS, JSON.stringify(ventas));
       localStorage.setItem(KEY_DEVS, JSON.stringify(devoluciones));
-    }
-
-    function resetAppClean() {
-      if (confirm('¿Estás seguro de borrar todo el inventario, ventas y devoluciones para dejar el sistema en cero?')) {
-        localStorage.removeItem(KEY_PRODS);
-        localStorage.removeItem(KEY_VENTAS);
-        localStorage.removeItem(KEY_DEVS);
-        productos = [];
-        ventas = [];
-        devoluciones = [];
-        init();
-      }
     }
 
     init();
