@@ -10,6 +10,9 @@
 
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- LIBRERÍA PARA GENERACIÓN DE PDF DESDE NAVEGADOR -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
   <!-- FIREBASE SDKs (v10) -->
   <script type="module">
@@ -26,11 +29,12 @@
       collection, 
       doc, 
       setDoc, 
+      getDocs,
       deleteDoc, 
       onSnapshot 
     } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-    // Configuración del Proyecto Firebase
+    // Configuración de Firebase
     const firebaseConfig = {
       apiKey: "AIzaSyCVyG2UTL7fLXiJJSIvEvYVZzPB5668r8Y",
       authDomain: "vitrinaapp-9da79.firebaseapp.com",
@@ -50,7 +54,6 @@
       window.appDb = db;
       window.isFirebaseActive = true;
 
-      // Observador de Estado de Autenticación
       onAuthStateChanged(auth, (user) => {
         const authModal = document.getElementById('auth-modal');
         const appContent = document.getElementById('app-content');
@@ -170,6 +173,11 @@
             <h2 class="text-xl font-bold text-white">Resumen Comercial</h2>
             <p class="text-xs text-slate-400">Control de ventas, stock y devoluciones en tiempo real</p>
           </div>
+          <!-- BOTÓN DE RESTABLECER / BORRAR BODEGA COMPLETA -->
+          <button id="reset-bodega-btn" class="bg-red-950/60 hover:bg-red-900 border border-red-800/80 text-red-300 hover:text-red-100 text-[11px] px-3 py-1.5 rounded-lg font-medium flex items-center space-x-1.5 transition-all shadow-sm">
+            <i class="fa-solid fa-trash-can"></i>
+            <span>Limpiar Bodega</span>
+          </button>
         </div>
 
         <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -291,9 +299,12 @@
             <h2 class="text-xl font-bold text-white">Registro de Ventas</h2>
             <p class="text-xs text-slate-400">Historial de ventas. Utiliza el botón "Devolver" si el cliente no regresó por el pedido</p>
           </div>
-          <button id="export-csv-btn" class="bg-slate-700 hover:bg-slate-600 text-white text-xs px-3 py-2 rounded-lg font-medium flex items-center space-x-1">
-            <i class="fa-solid fa-file-csv"></i><span>Exportar CSV</span>
-          </button>
+          <div class="flex space-x-2">
+            <button id="export-pdf-btn" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-2 rounded-lg font-medium flex items-center space-x-1.5 shadow-md transition-all">
+              <i class="fa-solid fa-file-pdf"></i>
+              <span>Exportar Reporte PDF</span>
+            </button>
+          </div>
         </div>
 
         <div class="bg-slate-800 rounded-xl border border-slate-700 shadow-sm overflow-hidden">
@@ -378,18 +389,18 @@
     </nav>
   </div>
 
-  <!-- LÓGICA DE APLICACIÓN REFACTORIZADA (CLEAN CODE) -->
+  <!-- LÓGICA DE APLICACIÓN -->
   <script type="module">
     import { 
       collection, 
       doc, 
       setDoc, 
+      getDocs,
       deleteDoc, 
       onSnapshot 
     } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
     import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
-    // Estado Global de la App
     let isRegisterMode = false;
     let state = {
       productos: [],
@@ -398,7 +409,6 @@
     };
     let unsubscribers = [];
 
-    // --- AUTENTICACIÓN Y GESTIÓN DE MODAL ---
     const authForm = document.getElementById('auth-form');
     const authToggleBtn = document.getElementById('auth-toggle-btn');
     const logoutBtn = document.getElementById('logout-btn');
@@ -421,7 +431,6 @@
         btn.innerHTML = `<span>Ingresar a la Bodega</span><i class="fa-solid fa-arrow-right text-xs"></i>`;
         toggleText.innerHTML = `¿No tienes una cuenta aún? <button type="button" id="auth-toggle-btn" class="text-emerald-400 hover:underline font-bold ml-1">Regístrate aquí</button>`;
       }
-      // Reasignar evento al botón recreado dinámicamente
       document.getElementById('auth-toggle-btn').addEventListener('click', authToggleBtn.onclick);
     });
 
@@ -447,34 +456,28 @@
       if (window.isFirebaseActive) {
         await signOut(window.appAuth);
       }
-      // Limpiar listeners activos de Firestore
       unsubscribers.forEach(unsub => unsub());
       unsubscribers = [];
       location.reload();
     });
 
-    // --- SINCRONIZACIÓN EN TIEMPO REAL CON FIRESTORE ---
     window.iniciarSincronizacionCloud = function(uid) {
       const db = window.appDb;
       if (!db) return;
 
-      // Limpiar listeners previos si existían
       unsubscribers.forEach(unsub => unsub());
       unsubscribers = [];
 
-      // Sincronizar Productos
       const unsubProds = onSnapshot(collection(db, `usuarios/${uid}/productos`), (snapshot) => {
         state.productos = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
         actualizarInterfaz();
       });
 
-      // Sincronizar Ventas
       const unsubVentas = onSnapshot(collection(db, `usuarios/${uid}/ventas`), (snapshot) => {
         state.ventas = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
         actualizarInterfaz();
       });
 
-      // Sincronizar Devoluciones
       const unsubDevs = onSnapshot(collection(db, `usuarios/${uid}/devoluciones`), (snapshot) => {
         state.devoluciones = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
         actualizarInterfaz();
@@ -483,7 +486,6 @@
       unsubscribers.push(unsubProds, unsubVentas, unsubDevs);
     };
 
-    // --- NAVEGACIÓN ENTRE PESTAÑAS (TABS) ---
     function cambiarPestaña(tabId) {
       ['dashboard', 'inventario', 'caja', 'devoluciones'].forEach(id => {
         const section = document.getElementById(`sec-${id}`);
@@ -493,7 +495,6 @@
       const targetSection = document.getElementById(`sec-${tabId}`);
       if (targetSection) targetSection.classList.remove('hidden');
 
-      // Actualizar estilos de navegación móvil
       document.querySelectorAll('.nav-btn-mob').forEach(btn => {
         if (btn.dataset.tab === tabId) {
           btn.classList.remove('text-slate-500', 'hover:text-slate-300');
@@ -504,7 +505,6 @@
         }
       });
 
-      // Actualizar estilos de navegación de escritorio
       document.querySelectorAll('.nav-btn-desk').forEach(btn => {
         if (btn.dataset.tab === tabId) {
           btn.className = "nav-btn-desk flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-emerald-400 shadow-sm transition-all";
@@ -518,7 +518,6 @@
       element.addEventListener('click', () => cambiarPestaña(element.dataset.tab));
     });
 
-    // --- GESTIÓN DE TALLAS Y FORMULARIO ---
     const tipoTallaSelect = document.getElementById('prod-tipo-talla');
     const contenedorTallas = document.getElementById('contenedor-tallas');
     const formProducto = document.getElementById('form-producto');
@@ -557,11 +556,9 @@
     }
 
     tipoTallaSelect.addEventListener('change', generarCamposTallas);
-
     document.getElementById('toggle-form-btn').addEventListener('click', () => formProducto.classList.toggle('hidden'));
     document.getElementById('cancel-form-btn').addEventListener('click', () => formProducto.classList.add('hidden'));
 
-    // --- LÓGICA DE NEGOCIO (CRUD PRODUCTOS Y VENTAS) ---
     document.getElementById('product-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       const codigo = document.getElementById('prod-codigo').value.trim().toUpperCase();
@@ -626,7 +623,6 @@
       }
     });
 
-    // --- RENDERIZADO DE INTERFAZ ---
     function actualizarInterfaz() {
       renderDashboard();
       renderInventario();
@@ -863,24 +859,112 @@
       }
     };
 
-    document.getElementById('export-csv-btn').addEventListener('click', () => {
-      if (state.ventas.length === 0) {
-        alert('No hay ventas registradas para exportar.');
-        return;
+    // --- FUNCIÓN DE LIMPIEZA COMPLETA DE BODEGA ---
+    document.getElementById('reset-bodega-btn').addEventListener('click', async () => {
+      const primeraConfirmacion = confirm('⚠️ ¿Estás seguro de que deseas BORRAR TODOS los datos de tu bodega?\n\nEsta acción eliminará permanentemente:\n- Todo el inventario de zapatillas\n- Todas las ventas registradas\n- Todas las devoluciones');
+      
+      if (!primeraConfirmacion) return;
+
+      const segundaConfirmacion = confirm('🚨 ÚLTIMA ADVERTENCIA:\n\nEsta acción no se puede deshacer. Se restablecerá tu cuenta a cero. ¿Deseas continuar?');
+      if (!segundaConfirmacion) return;
+
+      const db = window.appDb;
+      const uid = window.currentUser.uid;
+      const subcolecciones = ['productos', 'ventas', 'devoluciones'];
+
+      try {
+        for (const subcol of subcolecciones) {
+          const snapshot = await getDocs(collection(db, `usuarios/${uid}/${subcol}`));
+          const promesasEliminar = snapshot.docs.map(documento => deleteDoc(doc(db, `usuarios/${uid}/${subcol}`, documento.id)));
+          await Promise.all(promesasEliminar);
+        }
+        alert('🧹 ¡Bodega restablecida a cero con éxito!');
+      } catch (error) {
+        console.error("Error al limpiar la base de datos:", error);
+        alert("Ocurrió un error al intentar eliminar los datos.");
       }
-      let csv = 'Fecha,Detalle,Total\n';
-      state.ventas.forEach(v => {
-        csv += `"${v.fecha}","${v.concepto}",${v.total}\n`;
-      });
-      const blob = new Blob([csv], { type: 'text/csv' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'Ventas_Vitrina.csv';
-      a.click();
     });
 
-    // Inicializar campos de tallas al cargar
+    // --- GENERACIÓN Y DESCARGA DE REPORTE PDF ---
+    document.getElementById('export-pdf-btn').addEventListener('click', () => {
+      if (state.ventas.length === 0) {
+        alert('No hay ventas registradas para generar el reporte PDF.');
+        return;
+      }
+
+      const totalVentas = state.ventas.reduce((acc, v) => acc + Number(v.total), 0);
+      const totalPares = state.ventas.reduce((acc, v) => acc + Number(v.cantidad || 1), 0);
+
+      const filasTabla = state.ventas.map(v => `
+        <tr>
+          <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; font-family: monospace; font-weight: bold; color: #059669;">#${v.codigo}</td>
+          <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; font-weight: 600;">${v.nombre}</td>
+          <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; text-align: center;">${v.talla}</td>
+          <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; text-align: center;">${v.cantidad || 1}</td>
+          <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; text-align: right;">$${Number(v.precioUnitario || v.total).toLocaleString('es-CO')}</td>
+          <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; text-align: right; font-weight: bold; color: #0f172a;">$${Number(v.total).toLocaleString('es-CO')}</td>
+        </tr>
+      `).join('');
+
+      const elemento = document.createElement('div');
+      elemento.innerHTML = `
+        <div style="padding: 30px; font-family: 'Segoe UI', sans-serif; color: #1e293b; background-color: #ffffff;">
+          <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #059669; padding-bottom: 15px; margin-bottom: 20px;">
+            <div>
+              <h1 style="margin: 0; color: #059669; font-size: 24px; font-weight: bold;">Vitrina</h1>
+              <p style="margin: 2px 0 0 0; color: #64748b; font-size: 12px;">Control Comercial & Devoluciones de Bodega</p>
+            </div>
+            <div style="text-align: right;">
+              <h3 style="margin: 0; font-size: 14px; color: #334155;">REPORTE DE VENTAS</h3>
+              <p style="margin: 2px 0 0 0; color: #64748b; font-size: 11px;">Fecha: ${new Date().toLocaleDateString('es-CO')}</p>
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 15px; margin-bottom: 25px;">
+            <div style="flex: 1; background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; text-align: center;">
+              <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: bold;">Total Pares Vendidos</span>
+              <div style="font-size: 20px; font-weight: bold; color: #0f172a; margin-top: 4px;">${totalPares}</div>
+            </div>
+            <div style="flex: 1; background-color: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 8px; padding: 12px; text-align: center;">
+              <span style="font-size: 10px; color: #047857; text-transform: uppercase; font-weight: bold;">Ingresos Totales</span>
+              <div style="font-size: 20px; font-weight: bold; color: #059669; margin-top: 4px;">$${totalVentas.toLocaleString('es-CO')}</div>
+            </div>
+          </div>
+
+          <table style="width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 30px;">
+            <thead>
+              <tr style="background-color: #0f172a; color: #ffffff; text-transform: uppercase; font-size: 10px;">
+                <th style="padding: 10px; text-align: left;">Código</th>
+                <th style="padding: 10px; text-align: left;">Modelo</th>
+                <th style="padding: 10px; text-align: center;">Talla</th>
+                <th style="padding: 10px; text-align: center;">Cant.</th>
+                <th style="padding: 10px; text-align: right;">P. Unitario</th>
+                <th style="padding: 10px; text-align: right;">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${filasTabla}
+            </tbody>
+          </table>
+
+          <div style="border-top: 1px solid #e2e8f0; pt: 15px; text-align: center; font-size: 10px; color: #94a3b8; margin-top: 40px;">
+            <p style="margin: 0;">Vitrina v1.0 • Sistema de Gestión Comercial</p>
+            <p style="margin: 2px 0 0 0;">Diseñado & Desarrollado por <strong>Juan David Lenis</strong></p>
+          </div>
+        </div>
+      `;
+
+      const opciones = {
+        margin: 10,
+        filename: `Reporte_Ventas_Vitrina_${new Date().toISOString().slice(0,10)}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2 },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      };
+
+      html2pdf().set(opciones).from(elemento).save();
+    });
+
     generarCamposTallas();
   </script>
 </body>
