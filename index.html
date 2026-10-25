@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Vitrina - Control Comercial & Devoluciones</title>
   
-  <!-- FAVICON (Logo en la pestaña del navegador) -->
+  <!-- FAVICON -->
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='25' fill='%23059669'/><path d='M22 62c2-8 9-14 18-14h18c7 0 13-4 16-10 2-4 6-6 10-5 5 2 7 8 5 13l-4 11c-2 5-7 8-12 8H28c-4 0-7-2-8-6l2-7z' fill='none' stroke='white' stroke-width='6' stroke-linecap='round' stroke-linejoin='round'/><circle cx='36' cy='62' r='4' fill='white'/><circle cx='52' cy='62' r='4' fill='white'/><circle cx='68' cy='62' r='4' fill='white'/></svg>">
 
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
-  <!-- MÓDULOS DE FIREBASE (v10) -->
+  <!-- FIREBASE SDKs (v10) -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { 
@@ -26,81 +26,62 @@
       collection, 
       doc, 
       setDoc, 
-      getDocs, 
       deleteDoc, 
-      onSnapshot,
-      query,
-      where
+      onSnapshot 
     } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-    // 🔴 CONFIGURACIÓN DE TU PROYECTO FIREBASE
-    // Reemplaza estos valores con los de tu consola de Firebase
+    // Configuración del Proyecto Firebase
     const firebaseConfig = {
-  apiKey: "AIzaSyCVyG2UTL7fLXiJJSIvEvYVZzPB5668r8Y",
-  authDomain: "vitrinaapp-9da79.firebaseapp.com",
-  projectId: "vitrinaapp-9da79",
-  storageBucket: "vitrinaapp-9da79.firebasestorage.app",
-  messagingSenderId: "527745205282",
-  appId: "1:527745205282:web:d2209db8bc5fa9d892367b",
-  measurementId: "G-ZNRW9VFE0L"
-};
+      apiKey: "AIzaSyCVyG2UTL7fLXiJJSIvEvYVZzPB5668r8Y",
+      authDomain: "vitrinaapp-9da79.firebaseapp.com",
+      projectId: "vitrinaapp-9da79",
+      storageBucket: "vitrinaapp-9da79.firebasestorage.app",
+      messagingSenderId: "527745205282",
+      appId: "1:527745205282:web:d2209db8bc5fa9d892367b",
+      measurementId: "G-ZNRW9VFE0L"
+    };
 
-    // Inicializar Firebase
-    let app, auth, db;
     try {
-      app = initializeApp(firebaseConfig);
-      auth = getAuth(app);
-      db = getFirestore(app);
-      window.firebaseAuth = auth;
-      window.firebaseDb = db;
+      const app = initializeApp(firebaseConfig);
+      const auth = getAuth(app);
+      const db = getFirestore(app);
+
+      window.appAuth = auth;
+      window.appDb = db;
       window.isFirebaseActive = true;
-    } catch (e) {
-      console.warn("Firebase no está configurado aún o faltan credenciales. Se usará el modo LocalStorage temporal.");
-      window.isFirebaseActive = false;
-    }
 
-    // Exponer funciones globales para Auth
-    window.fnLogin = async (email, password) => {
-      if (!window.isFirebaseActive) return false;
-      return await signInWithEmailAndPassword(auth, email, password);
-    };
-
-    window.fnRegister = async (email, password) => {
-      if (!window.isFirebaseActive) return false;
-      return await createUserWithEmailAndPassword(auth, email, password);
-    };
-
-    window.fnLogout = async () => {
-      if (window.isFirebaseActive) await signOut(auth);
-      localStorage.removeItem('vitrina_session_user');
-      location.reload();
-    };
-
-    // Escuchar cambios de estado de autenticación
-    if (window.isFirebaseActive) {
+      // Observador de Estado de Autenticación
       onAuthStateChanged(auth, (user) => {
+        const authModal = document.getElementById('auth-modal');
+        const appContent = document.getElementById('app-content');
+        const userEmailDisplay = document.getElementById('user-email-display');
+
         if (user) {
           window.currentUser = user;
-          document.getElementById('auth-modal').classList.add('hidden');
-          document.getElementById('app-content').classList.remove('hidden');
-          document.getElementById('user-email-display').innerText = user.email;
-          if (window.syncDataFromCloud) window.syncDataFromCloud(user.uid);
+          authModal.classList.add('hidden');
+          appContent.classList.remove('hidden');
+          userEmailDisplay.textContent = user.email;
+          if (window.iniciarSincronizacionCloud) {
+            window.iniciarSincronizacionCloud(user.uid);
+          }
         } else {
           window.currentUser = null;
-          document.getElementById('auth-modal').classList.remove('hidden');
-          document.getElementById('app-content').classList.add('hidden');
+          authModal.classList.remove('hidden');
+          appContent.classList.add('hidden');
         }
       });
+    } catch (error) {
+      console.error("Error al inicializar Firebase:", error);
+      window.isFirebaseActive = false;
     }
   </script>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen font-sans antialiased pb-28 md:pb-12 md:pt-20 flex flex-col justify-between">
 
-  <!-- MODAL / PANTALLA DE INICIO DE SESIÓN & REGISTRO -->
+  <!-- MODAL DE AUTENTICACIÓN -->
   <div id="auth-modal" class="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-50 flex items-center justify-center p-4">
     <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 md:p-8 max-w-md w-full shadow-2xl space-y-6">
       
-      <!-- Encabezado Modal -->
       <div class="text-center space-y-2">
         <div class="w-12 h-12 bg-emerald-600 text-white rounded-2xl flex items-center justify-center font-bold text-2xl mx-auto shadow-lg shadow-emerald-600/30">
           <i class="fa-solid fa-shoe-prints"></i>
@@ -109,8 +90,7 @@
         <p id="auth-subtitle" class="text-xs text-slate-400">Ingresa tus credenciales para acceder a tu bodega sincronizada</p>
       </div>
 
-      <!-- Formulario Auth -->
-      <form onsubmit="handleAuthSubmit(event)" class="space-y-4">
+      <form id="auth-form" class="space-y-4">
         <div>
           <label class="block text-xs font-semibold text-slate-300 mb-1">Correo Electrónico</label>
           <div class="relative">
@@ -133,22 +113,20 @@
         </button>
       </form>
 
-      <!-- Alternar Registro / Login -->
       <div class="text-center pt-2 border-t border-slate-700/60 text-xs">
         <p id="auth-toggle-text" class="text-slate-400">
           ¿No tienes una cuenta aún? 
-          <button type="button" onclick="toggleAuthMode()" class="text-emerald-400 hover:underline font-bold ml-1">Regístrate aquí</button>
+          <button type="button" id="auth-toggle-btn" class="text-emerald-400 hover:underline font-bold ml-1">Regístrate aquí</button>
         </p>
       </div>
     </div>
   </div>
 
-  <!-- CONTENIDO DE LA APLICACIÓN (Oculto hasta autenticarse) -->
+  <!-- CONTENIDO PRINCIPAL DE LA APLICACIÓN -->
   <div id="app-content" class="hidden flex-grow flex flex-col justify-between">
     
-    <!-- Header Superior -->
+    <!-- HEADER -->
     <header class="fixed top-0 left-0 right-0 bg-slate-800 border-b border-slate-700 z-40 px-4 py-3 flex items-center justify-between shadow-md">
-      <!-- Logo -->
       <div class="flex items-center space-x-3">
         <div class="w-9 h-9 bg-emerald-600 text-white rounded-xl flex items-center justify-center font-bold text-lg shadow-md shadow-emerald-600/30">
           <i class="fa-solid fa-shoe-prints text-sm"></i>
@@ -159,39 +137,33 @@
         </div>
       </div>
 
-      <!-- Navegación Escritorio -->
+      <!-- NAV ESCRITORIO -->
       <nav class="hidden md:flex items-center space-x-1 bg-slate-700/60 p-1 rounded-xl border border-slate-600">
-        <button onclick="switchTab('dashboard')" id="nav-desk-dashboard" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-emerald-400 shadow-sm transition-all">
-          <i class="fa-solid fa-chart-pie"></i>
-          <span>Inicio</span>
+        <button data-tab="dashboard" class="nav-btn-desk flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-emerald-400 shadow-sm transition-all">
+          <i class="fa-solid fa-chart-pie"></i><span>Inicio</span>
         </button>
-        <button onclick="switchTab('inventario')" id="nav-desk-inventario" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition-all">
-          <i class="fa-solid fa-shoe-prints"></i>
-          <span>Stock</span>
+        <button data-tab="inventario" class="nav-btn-desk flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition-all">
+          <i class="fa-solid fa-shoe-prints"></i><span>Stock</span>
         </button>
-        <button onclick="switchTab('caja')" id="nav-desk-caja" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition-all">
-          <i class="fa-solid fa-receipt"></i>
-          <span>Ventas</span>
+        <button data-tab="caja" class="nav-btn-desk flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition-all">
+          <i class="fa-solid fa-receipt"></i><span>Ventas</span>
         </button>
-        <button onclick="switchTab('devoluciones')" id="nav-desk-devoluciones" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition-all">
-          <i class="fa-solid fa-rotate-left"></i>
-          <span>Devoluciones</span>
+        <button data-tab="devoluciones" class="nav-btn-desk flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition-all">
+          <i class="fa-solid fa-rotate-left"></i><span>Devoluciones</span>
         </button>
       </nav>
       
-      <!-- Usuario Activo y Salir -->
       <div class="flex items-center space-x-2">
         <span id="user-email-display" class="hidden sm:inline text-[11px] text-slate-400 font-mono bg-slate-700/60 px-2 py-1 rounded-lg"></span>
-        <button onclick="window.fnLogout()" title="Cerrar Sesión" class="p-2 text-slate-400 hover:text-red-400 rounded-lg hover:bg-slate-700 transition-colors">
+        <button id="logout-btn" title="Cerrar Sesión" class="p-2 text-slate-400 hover:text-red-400 rounded-lg hover:bg-slate-700 transition-colors">
           <i class="fa-solid fa-right-from-bracket text-sm"></i>
         </button>
       </div>
     </header>
 
-    <!-- Layout Principal -->
     <main class="max-w-4xl mx-auto px-4 pt-16 md:pt-4 w-full flex-grow">
 
-      <!-- SECCIÓN 1: DASHBOARD -->
+      <!-- SECCIÓN: DASHBOARD -->
       <section id="sec-dashboard" class="space-y-4 py-4">
         <div class="flex items-center justify-between">
           <div>
@@ -200,7 +172,6 @@
           </div>
         </div>
 
-        <!-- Tarjetas de Métricas -->
         <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-sm">
             <p class="text-xs font-medium text-slate-400 mb-1">Total Referencias</p>
@@ -220,84 +191,80 @@
           </div>
         </div>
 
-        <!-- Acciones Rápidas -->
         <div class="grid grid-cols-2 gap-3 pt-2">
-          <button onclick="switchTab('inventario')" class="flex items-center justify-center space-x-2 bg-emerald-600 hover:bg-emerald-700 text-white p-3.5 rounded-xl font-semibold shadow-lg shadow-emerald-600/20 transition-all">
-            <i class="fa-solid fa-shoe-prints text-lg"></i>
-            <span class="text-sm">Ver / Agregar Stock</span>
+          <button data-tab="inventario" class="nav-trigger flex items-center justify-center space-x-2 bg-emerald-600 hover:bg-emerald-700 text-white p-3.5 rounded-xl font-semibold shadow-lg shadow-emerald-600/20 transition-all">
+            <i class="fa-solid fa-shoe-prints text-lg"></i><span class="text-sm">Ver / Agregar Stock</span>
           </button>
-          <button onclick="switchTab('caja')" class="flex items-center justify-center space-x-2 bg-slate-700 hover:bg-slate-600 text-white p-3.5 rounded-xl font-semibold shadow-md transition-all">
-            <i class="fa-solid fa-receipt text-sm"></i>
-            <span class="text-sm">Ver Ventas & Devolver</span>
+          <button data-tab="caja" class="nav-trigger flex items-center justify-center space-x-2 bg-slate-700 hover:bg-slate-600 text-white p-3.5 rounded-xl font-semibold shadow-md transition-all">
+            <i class="fa-solid fa-receipt text-sm"></i><span class="text-sm">Ver Ventas & Devolver</span>
           </button>
         </div>
 
-        <!-- Estado / Alertas de Inventario Dinámicas -->
         <div class="bg-slate-800 rounded-xl border border-slate-700 p-4 shadow-sm space-y-3">
           <h3 id="dash-alert-title" class="text-sm font-bold flex items-center space-x-2"></h3>
           <div id="dash-alert-list" class="space-y-2 text-xs"></div>
         </div>
       </section>
 
-      <!-- SECCIÓN 2: INVENTARIO (STOCK) -->
+      <!-- SECCIÓN: INVENTARIO -->
       <section id="sec-inventario" class="space-y-4 py-4 hidden">
         <div class="flex items-center justify-between">
           <div>
             <h2 class="text-xl font-bold text-white">Inventario de Zapatillas</h2>
             <p class="text-xs text-slate-400">Administra códigos, modelos, curvas de tallas y ventas en directo</p>
           </div>
-          <button onclick="toggleFormProducto()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-2 rounded-lg font-medium flex items-center space-x-1">
-            <i class="fa-solid fa-plus"></i>
-            <span>Nueva Zapatilla</span>
+          <button id="toggle-form-btn" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-2 rounded-lg font-medium flex items-center space-x-1">
+            <i class="fa-solid fa-plus"></i><span>Nueva Zapatilla</span>
           </button>
         </div>
 
-        <!-- Formulario Multitalla -->
+        <!-- Formulario de Registro -->
         <div id="form-producto" class="hidden bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-md space-y-4">
           <h3 class="text-sm font-bold text-white border-b border-slate-700 pb-2">Registrar Modelo y Curva de Tallas</h3>
           
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
-            <div>
-              <label class="block font-semibold text-slate-300 mb-1">Código de 4 Dígitos</label>
-              <input type="text" id="prod-codigo" maxlength="4" placeholder="Ej: 3954" class="w-full p-2 bg-slate-700 text-white border border-slate-600 rounded-lg font-mono uppercase">
+          <form id="product-form" class="space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+              <div>
+                <label class="block font-semibold text-slate-300 mb-1">Código de 4 Dígitos</label>
+                <input type="text" id="prod-codigo" maxlength="4" placeholder="Ej: 3954" required class="w-full p-2 bg-slate-700 text-white border border-slate-600 rounded-lg font-mono uppercase">
+              </div>
+              <div>
+                <label class="block font-semibold text-slate-300 mb-1">Modelo / Referencia</label>
+                <input type="text" id="prod-nombre" placeholder="Ej: NIKE AF1 DAMA" required class="w-full p-2 bg-slate-700 text-white border border-slate-600 rounded-lg">
+              </div>
+              <div>
+                <label class="block font-semibold text-slate-300 mb-1">Tipo de Tallaje / Curva</label>
+                <select id="prod-tipo-talla" class="w-full p-2 bg-slate-700 text-white border border-slate-600 rounded-lg font-medium">
+                  <option value="dama">Curva Dama (36 al 39)</option>
+                  <option value="caballero">Curva Caballero (40 al 44)</option>
+                  <option value="custom">Personalizado / Talla Especial</option>
+                </select>
+              </div>
+              <div>
+                <label class="block font-semibold text-slate-300 mb-1">Costo Compra ($)</label>
+                <input type="number" id="prod-costo" placeholder="0" min="0" class="w-full p-2 bg-slate-700 text-white border border-slate-600 rounded-lg">
+              </div>
+              <div>
+                <label class="block font-semibold text-slate-300 mb-1">Precio Venta Público ($)</label>
+                <input type="number" id="prod-precio" placeholder="0" min="1" required class="w-full p-2 bg-slate-700 text-white border border-slate-600 rounded-lg">
+              </div>
             </div>
-            <div>
-              <label class="block font-semibold text-slate-300 mb-1">Modelo / Referencia</label>
-              <input type="text" id="prod-nombre" placeholder="Ej: NIKE AF1 DAMA" class="w-full p-2 bg-slate-700 text-white border border-slate-600 rounded-lg">
-            </div>
-            <div>
-              <label class="block font-semibold text-slate-300 mb-1">Tipo de Tallaje / Curva</label>
-              <select id="prod-tipo-talla" onchange="generarCamposTallas()" class="w-full p-2 bg-slate-700 text-white border border-slate-600 rounded-lg font-medium">
-                <option value="dama">Curva Dama (36 al 39)</option>
-                <option value="caballero">Curva Caballero (40 al 44)</option>
-                <option value="custom">Personalizado / Talla Especial</option>
-              </select>
-            </div>
-            <div>
-              <label class="block font-semibold text-slate-300 mb-1">Costo Compra ($)</label>
-              <input type="number" id="prod-costo" placeholder="0" class="w-full p-2 bg-slate-700 text-white border border-slate-600 rounded-lg">
-            </div>
-            <div>
-              <label class="block font-semibold text-slate-300 mb-1">Precio Venta Público ($)</label>
-              <input type="number" id="prod-precio" placeholder="0" class="w-full p-2 bg-slate-700 text-white border border-slate-600 rounded-lg">
-            </div>
-          </div>
 
-          <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-700/80 space-y-2">
-            <p class="text-xs font-bold text-emerald-400">Pares Disponibles por Talla:</p>
-            <div id="contenedor-tallas" class="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs"></div>
-          </div>
+            <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-700/80 space-y-2">
+              <p class="text-xs font-bold text-emerald-400">Pares Disponibles por Talla:</p>
+              <div id="contenedor-tallas" class="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs"></div>
+            </div>
 
-          <div class="flex justify-end space-x-2 pt-2">
-            <button onclick="toggleFormProducto()" class="px-3 py-1.5 text-xs text-slate-400 font-medium">Cancelar</button>
-            <button onclick="guardarProductoMultitalla()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-4 py-1.5 rounded-lg font-semibold">Guardar Referencia</button>
-          </div>
+            <div class="flex justify-end space-x-2 pt-2">
+              <button type="button" id="cancel-form-btn" class="px-3 py-1.5 text-xs text-slate-400 font-medium">Cancelar</button>
+              <button type="submit" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-4 py-1.5 rounded-lg font-semibold">Guardar Referencia</button>
+            </div>
+          </form>
         </div>
 
-        <!-- Tabla de Productos -->
         <div class="bg-slate-800 rounded-xl border border-slate-700 shadow-sm overflow-hidden">
           <div class="p-3 border-b border-slate-700 bg-slate-800/50 flex items-center justify-between">
-            <input type="text" id="search-inventory" onkeyup="renderInventario()" placeholder="🔍 Buscar por Código (4 dígitos) o Modelo..." class="text-xs p-2 bg-slate-700 text-white border border-slate-600 rounded-lg w-full max-w-sm">
+            <input type="text" id="search-inventory" placeholder="🔍 Buscar por Código (4 dígitos) o Modelo..." class="text-xs p-2 bg-slate-700 text-white border border-slate-600 rounded-lg w-full max-w-sm">
           </div>
           <div class="overflow-x-auto">
             <table class="w-full text-left text-xs text-slate-300">
@@ -317,16 +284,15 @@
         </div>
       </section>
 
-      <!-- SECCIÓN 3: REGISTRO DE VENTAS -->
+      <!-- SECCIÓN: VENTAS -->
       <section id="sec-caja" class="space-y-4 py-4 hidden">
         <div class="flex items-center justify-between">
           <div>
             <h2 class="text-xl font-bold text-white">Registro de Ventas</h2>
             <p class="text-xs text-slate-400">Historial de ventas. Utiliza el botón "Devolver" si el cliente no regresó por el pedido</p>
           </div>
-          <button onclick="exportarCSV()" class="bg-slate-700 hover:bg-slate-600 text-white text-xs px-3 py-2 rounded-lg font-medium flex items-center space-x-1">
-            <i class="fa-solid fa-file-csv"></i>
-            <span>Exportar CSV</span>
+          <button id="export-csv-btn" class="bg-slate-700 hover:bg-slate-600 text-white text-xs px-3 py-2 rounded-lg font-medium flex items-center space-x-1">
+            <i class="fa-solid fa-file-csv"></i><span>Exportar CSV</span>
           </button>
         </div>
 
@@ -347,7 +313,7 @@
         </div>
       </section>
 
-      <!-- SECCIÓN 4: DEVOLUCIONES -->
+      <!-- SECCIÓN: DEVOLUCIONES -->
       <section id="sec-devoluciones" class="space-y-4 py-4 hidden">
         <div class="flex items-center justify-between">
           <div>
@@ -376,7 +342,7 @@
 
     </main>
 
-    <!-- FOOTER CON AUTORÍA -->
+    <!-- FOOTER -->
     <footer class="mt-8 border-t border-slate-800 py-6 px-4 bg-slate-900/80 text-center text-xs text-slate-500">
       <div class="max-w-4xl mx-auto flex flex-col md:flex-row items-center justify-between gap-3">
         <div class="flex items-center space-x-2">
@@ -389,46 +355,55 @@
         </div>
         <div class="flex items-center space-x-3">
           <a href="https://wa.me/573181848375?text=Hola,%20requiero%20soporte%20sobre%20el%20sistema%20Vitrina" target="_blank" class="text-slate-400 hover:text-emerald-400 transition-colors flex items-center space-x-1">
-            <i class="fa-brands fa-whatsapp text-sm"></i>
-            <span>Contacto / Soporte</span>
+            <i class="fa-brands fa-whatsapp text-sm"></i><span>Contacto / Soporte</span>
           </a>
         </div>
       </div>
     </footer>
 
-    <!-- Navegación Inferior (Móvil) -->
+    <!-- NAV MÓVIL -->
     <nav class="md:hidden fixed bottom-0 left-0 right-0 bg-slate-800 border-t border-slate-700 z-40 flex justify-around py-2 shadow-lg">
-      <button onclick="switchTab('dashboard')" id="nav-mob-dashboard" class="flex flex-col items-center text-emerald-400 px-3 py-1">
-        <i class="fa-solid fa-chart-pie text-base"></i>
-        <span class="text-[10px] font-medium mt-1">Inicio</span>
+      <button data-tab="dashboard" class="nav-btn-mob flex flex-col items-center text-emerald-400 px-3 py-1">
+        <i class="fa-solid fa-chart-pie text-base"></i><span class="text-[10px] font-medium mt-1">Inicio</span>
       </button>
-      <button onclick="switchTab('inventario')" id="nav-mob-inventario" class="flex flex-col items-center text-slate-500 hover:text-slate-300 px-3 py-1">
-        <i class="fa-solid fa-shoe-prints text-base"></i>
-        <span class="text-[10px] font-medium mt-1">Stock</span>
+      <button data-tab="inventario" class="nav-btn-mob flex flex-col items-center text-slate-500 hover:text-slate-300 px-3 py-1">
+        <i class="fa-solid fa-shoe-prints text-base"></i><span class="text-[10px] font-medium mt-1">Stock</span>
       </button>
-      <button onclick="switchTab('caja')" id="nav-mob-caja" class="flex flex-col items-center text-slate-500 hover:text-slate-300 px-3 py-1">
-        <i class="fa-solid fa-receipt text-base"></i>
-        <span class="text-[10px] font-medium mt-1">Ventas</span>
+      <button data-tab="caja" class="nav-btn-mob flex flex-col items-center text-slate-500 hover:text-slate-300 px-3 py-1">
+        <i class="fa-solid fa-receipt text-base"></i><span class="text-[10px] font-medium mt-1">Ventas</span>
       </button>
-      <button onclick="switchTab('devoluciones')" id="nav-mob-devoluciones" class="flex flex-col items-center text-slate-500 hover:text-slate-300 px-3 py-1">
-        <i class="fa-solid fa-rotate-left text-base"></i>
-        <span class="text-[10px] font-medium mt-1">Devolución</span>
+      <button data-tab="devoluciones" class="nav-btn-mob flex flex-col items-center text-slate-500 hover:text-slate-300 px-3 py-1">
+        <i class="fa-solid fa-rotate-left text-base"></i><span class="text-[10px] font-medium mt-1">Devolución</span>
       </button>
     </nav>
   </div>
 
-  <!-- JAVASCRIPT DE LÓGICA DE APPLICACIÓN Y AUTH -->
-  <script>
+  <!-- LÓGICA DE APLICACIÓN REFACTORIZADA (CLEAN CODE) -->
+  <script type="module">
+    import { 
+      collection, 
+      doc, 
+      setDoc, 
+      deleteDoc, 
+      onSnapshot 
+    } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+    import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+
+    // Estado Global de la App
     let isRegisterMode = false;
-    const KEY_PRODS = 'vitrina_app_prods_v1';
-    const KEY_VENTAS = 'vitrina_app_ventas_v1';
-    const KEY_DEVS = 'vitrina_app_devs_v1';
+    let state = {
+      productos: [],
+      ventas: [],
+      devoluciones: []
+    };
+    let unsubscribers = [];
 
-    let productos = JSON.parse(localStorage.getItem(KEY_PRODS)) || [];
-    let ventas = JSON.parse(localStorage.getItem(KEY_VENTAS)) || [];
-    let devoluciones = JSON.parse(localStorage.getItem(KEY_DEVS)) || [];
+    // --- AUTENTICACIÓN Y GESTIÓN DE MODAL ---
+    const authForm = document.getElementById('auth-form');
+    const authToggleBtn = document.getElementById('auth-toggle-btn');
+    const logoutBtn = document.getElementById('logout-btn');
 
-    function toggleAuthMode() {
+    authToggleBtn.addEventListener('click', () => {
       isRegisterMode = !isRegisterMode;
       const title = document.getElementById('auth-title');
       const subtitle = document.getElementById('auth-subtitle');
@@ -436,288 +411,291 @@
       const toggleText = document.getElementById('auth-toggle-text');
 
       if (isRegisterMode) {
-        title.innerText = "Crear Cuenta en Vitrina";
-        subtitle.innerText = "Crea tu usuario para sincronizar tu bodega entre tu PC y celular";
+        title.textContent = "Crear Cuenta en Vitrina";
+        subtitle.textContent = "Crea tu usuario para sincronizar tu bodega entre tu PC y celular";
         btn.innerHTML = `<span>Registrar mi Cuenta</span><i class="fa-solid fa-user-plus text-xs"></i>`;
-        toggleText.innerHTML = `¿Ya tienes cuenta activa? <button type="button" onclick="toggleAuthMode()" class="text-emerald-400 hover:underline font-bold ml-1">Inicia sesión aquí</button>`;
+        toggleText.innerHTML = `¿Ya tienes cuenta activa? <button type="button" id="auth-toggle-btn" class="text-emerald-400 hover:underline font-bold ml-1">Inicia sesión aquí</button>`;
       } else {
-        title.innerText = "Iniciar Sesión en Vitrina";
-        subtitle.innerText = "Ingresa tus credenciales para acceder a tu bodega sincronizada";
+        title.textContent = "Iniciar Sesión en Vitrina";
+        subtitle.textContent = "Ingresa tus credenciales para acceder a tu bodega sincronizada";
         btn.innerHTML = `<span>Ingresar a la Bodega</span><i class="fa-solid fa-arrow-right text-xs"></i>`;
-        toggleText.innerHTML = `¿No tienes una cuenta aún? <button type="button" onclick="toggleAuthMode()" class="text-emerald-400 hover:underline font-bold ml-1">Regístrate aquí</button>`;
+        toggleText.innerHTML = `¿No tienes una cuenta aún? <button type="button" id="auth-toggle-btn" class="text-emerald-400 hover:underline font-bold ml-1">Regístrate aquí</button>`;
       }
-    }
+      // Reasignar evento al botón recreado dinámicamente
+      document.getElementById('auth-toggle-btn').addEventListener('click', authToggleBtn.onclick);
+    });
 
-    async function handleAuthSubmit(e) {
+    authForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const email = document.getElementById('auth-email').value.trim();
       const pass = document.getElementById('auth-password').value.trim();
-
-      if (!email || !pass) return;
+      if (!window.isFirebaseActive) return;
 
       try {
         if (isRegisterMode) {
-          if (window.isFirebaseActive) {
-            await window.fnRegister(email, pass);
-            alert("¡Cuenta creada con éxito! Bienvenido a Vitrina.");
-          } else {
-            localStorage.setItem('vitrina_session_user', email);
-            bypassAuthLocal(email);
-          }
+          await createUserWithEmailAndPassword(window.appAuth, email, pass);
+          alert("¡Cuenta creada con éxito! Bienvenido a Vitrina.");
         } else {
-          if (window.isFirebaseActive) {
-            await window.fnLogin(email, pass);
-          } else {
-            localStorage.setItem('vitrina_session_user', email);
-            bypassAuthLocal(email);
-          }
+          await signInWithEmailAndPassword(window.appAuth, email, pass);
         }
-      } catch (err) {
-        alert("Error de acceso: " + (err.message || "Credenciales incorrectas"));
-      }
-    }
-
-    function bypassAuthLocal(email) {
-      document.getElementById('auth-modal').classList.add('hidden');
-      document.getElementById('app-content').classList.remove('hidden');
-      document.getElementById('user-email-display').innerText = email;
-      init();
-    }
-
-    // Comprobar sesión local si Firebase no está activo aún
-    window.addEventListener('DOMContentLoaded', () => {
-      const savedUser = localStorage.getItem('vitrina_session_user');
-      if (savedUser && !window.isFirebaseActive) {
-        bypassAuthLocal(savedUser);
+      } catch (error) {
+        alert("Error de acceso: " + (error.message || "Credenciales incorrectas"));
       }
     });
 
-    function obtenerFechaFormateada() {
-      const now = new Date();
-      const aAAA = now.getFullYear();
-      const mm = String(now.getMonth() + 1).padStart(2, '0');
-      const dd = String(now.getDate()).padStart(2, '0');
-      const hh = String(now.getHours()).padStart(2, '0');
-      const min = String(now.getMinutes()).padStart(2, '0');
-      return `${aAAA}-${mm}-${dd} ${hh}:${min}`;
-    }
+    logoutBtn.addEventListener('click', async () => {
+      if (window.isFirebaseActive) {
+        await signOut(window.appAuth);
+      }
+      // Limpiar listeners activos de Firestore
+      unsubscribers.forEach(unsub => unsub());
+      unsubscribers = [];
+      location.reload();
+    });
 
-    function init() {
-      generarCamposTallas();
-      renderDashboard();
-      renderInventario();
-      renderVentas();
-      renderDevoluciones();
-    }
+    // --- SINCRONIZACIÓN EN TIEMPO REAL CON FIRESTORE ---
+    window.iniciarSincronizacionCloud = function(uid) {
+      const db = window.appDb;
+      if (!db) return;
 
-    function switchTab(tabId) {
+      // Limpiar listeners previos si existían
+      unsubscribers.forEach(unsub => unsub());
+      unsubscribers = [];
+
+      // Sincronizar Productos
+      const unsubProds = onSnapshot(collection(db, `usuarios/${uid}/productos`), (snapshot) => {
+        state.productos = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+        actualizarInterfaz();
+      });
+
+      // Sincronizar Ventas
+      const unsubVentas = onSnapshot(collection(db, `usuarios/${uid}/ventas`), (snapshot) => {
+        state.ventas = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+        actualizarInterfaz();
+      });
+
+      // Sincronizar Devoluciones
+      const unsubDevs = onSnapshot(collection(db, `usuarios/${uid}/devoluciones`), (snapshot) => {
+        state.devoluciones = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+        actualizarInterfaz();
+      });
+
+      unsubscribers.push(unsubProds, unsubVentas, unsubDevs);
+    };
+
+    // --- NAVEGACIÓN ENTRE PESTAÑAS (TABS) ---
+    function cambiarPestaña(tabId) {
       ['dashboard', 'inventario', 'caja', 'devoluciones'].forEach(id => {
-        document.getElementById(`sec-${id}`).classList.add('hidden');
-        const mobNav = document.getElementById(`nav-mob-${id}`);
-        if(mobNav) {
-          mobNav.classList.remove('text-emerald-400');
-          mobNav.classList.add('text-slate-500');
-        }
-        const deskNav = document.getElementById(`nav-desk-${id}`);
-        if(deskNav) {
-          deskNav.className = "flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition-all";
+        const section = document.getElementById(`sec-${id}`);
+        if (section) section.classList.add('hidden');
+      });
+
+      const targetSection = document.getElementById(`sec-${tabId}`);
+      if (targetSection) targetSection.classList.remove('hidden');
+
+      // Actualizar estilos de navegación móvil
+      document.querySelectorAll('.nav-btn-mob').forEach(btn => {
+        if (btn.dataset.tab === tabId) {
+          btn.classList.remove('text-slate-500', 'hover:text-slate-300');
+          btn.classList.add('text-emerald-400');
+        } else {
+          btn.classList.remove('text-emerald-400');
+          btn.classList.add('text-slate-500', 'hover:text-slate-300');
         }
       });
 
-      document.getElementById(`sec-${tabId}`).classList.remove('hidden');
-      const activeMobNav = document.getElementById(`nav-mob-${tabId}`);
-      if(activeMobNav) {
-        activeMobNav.classList.remove('text-slate-500');
-        activeMobNav.classList.add('text-emerald-400');
-      }
-      const activeDeskNav = document.getElementById(`nav-desk-${tabId}`);
-      if(activeDeskNav) {
-        activeDeskNav.className = "flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-emerald-400 shadow-sm transition-all";
-      }
+      // Actualizar estilos de navegación de escritorio
+      document.querySelectorAll('.nav-btn-desk').forEach(btn => {
+        if (btn.dataset.tab === tabId) {
+          btn.className = "nav-btn-desk flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-emerald-400 shadow-sm transition-all";
+        } else {
+          btn.className = "nav-btn-desk flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition-all";
+        }
+      });
     }
 
+    document.querySelectorAll('[data-tab]').forEach(element => {
+      element.addEventListener('click', () => cambiarPestaña(element.dataset.tab));
+    });
+
+    // --- GESTIÓN DE TALLAS Y FORMULARIO ---
+    const tipoTallaSelect = document.getElementById('prod-tipo-talla');
+    const contenedorTallas = document.getElementById('contenedor-tallas');
+    const formProducto = document.getElementById('form-producto');
+
     function generarCamposTallas() {
-      const tipo = document.getElementById('prod-tipo-talla').value;
-      const container = document.getElementById('contenedor-tallas');
-      container.innerHTML = '';
+      const tipo = tipoTallaSelect.value;
+      contenedorTallas.innerHTML = '';
 
       if (tipo === 'dama') {
-        ['36', '37', '38', '39'].forEach(t => {
-          container.innerHTML += `
-            <div class="bg-slate-800 p-2 rounded-lg border border-slate-700 text-center">
-              <label class="block font-bold text-slate-300 mb-1">Talla ${t}</label>
-              <input type="number" min="0" data-talla="${t}" placeholder="0" class="input-talla-stock w-full p-1 bg-slate-700 text-white text-center border border-slate-600 rounded font-bold focus:border-emerald-500 focus:outline-none">
-            </div>
-          `;
-        });
+        ['36', '37', '38', '39'].forEach(t => renderInputTalla(t));
       } else if (tipo === 'caballero') {
-        ['40', '41', '42', '43', '44'].forEach(t => {
-          container.innerHTML += `
-            <div class="bg-slate-800 p-2 rounded-lg border border-slate-700 text-center">
-              <label class="block font-bold text-slate-300 mb-1">Talla ${t}</label>
-              <input type="number" min="0" data-talla="${t}" placeholder="0" class="input-talla-stock w-full p-1 bg-slate-700 text-white text-center border border-slate-600 rounded font-bold focus:border-emerald-500 focus:outline-none">
-            </div>
-          `;
-        });
+        ['40', '41', '42', '43', '44'].forEach(t => renderInputTalla(t));
       } else {
-        container.innerHTML = `
+        contenedorTallas.innerHTML = `
           <div class="col-span-full grid grid-cols-2 gap-2">
             <div>
               <label class="block font-semibold text-slate-300 mb-1">Número de Talla Especial</label>
-              <input type="text" id="custom-talla-num" placeholder="Ej: 35.5 / 45 / US 8" class="w-full p-2 bg-slate-700 text-white border border-slate-600 rounded">
+              <input type="text" id="custom-talla-num" placeholder="Ej: 35.5 / 45" class="w-full p-2 bg-slate-700 text-white border border-slate-600 rounded">
             </div>
             <div>
               <label class="block font-semibold text-slate-300 mb-1">Pares Disponibles</label>
-              <input type="number" min="1" id="custom-talla-qty" placeholder="0" class="w-full p-2 bg-slate-700 text-white border border-slate-600 rounded font-bold">
+              <input type="number" id="custom-talla-qty" min="1" placeholder="0" class="w-full p-2 bg-slate-700 text-white border border-slate-600 rounded font-bold">
             </div>
           </div>
         `;
       }
     }
 
-    function guardarProductoMultitalla() {
+    function renderInputTalla(talla) {
+      contenedorTallas.innerHTML += `
+        <div class="bg-slate-800 p-2 rounded-lg border border-slate-700 text-center">
+          <label class="block font-bold text-slate-300 mb-1">Talla ${talla}</label>
+          <input type="number" min="0" data-talla="${talla}" placeholder="0" class="input-talla-stock w-full p-1 bg-slate-700 text-white text-center border border-slate-600 rounded font-bold focus:border-emerald-500 focus:outline-none">
+        </div>
+      `;
+    }
+
+    tipoTallaSelect.addEventListener('change', generarCamposTallas);
+
+    document.getElementById('toggle-form-btn').addEventListener('click', () => formProducto.classList.toggle('hidden'));
+    document.getElementById('cancel-form-btn').addEventListener('click', () => formProducto.classList.add('hidden'));
+
+    // --- LÓGICA DE NEGOCIO (CRUD PRODUCTOS Y VENTAS) ---
+    document.getElementById('product-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
       const codigo = document.getElementById('prod-codigo').value.trim().toUpperCase();
       const nombre = document.getElementById('prod-nombre').value.trim();
-      const tipo = document.getElementById('prod-tipo-talla').value;
+      const tipo = tipoTallaSelect.value;
       const costo = parseFloat(document.getElementById('prod-costo').value) || 0;
       const precio = parseFloat(document.getElementById('prod-precio').value) || 0;
 
-      if (!codigo || codigo.length !== 4) {
-        alert('Por favor ingresa un código único de 4 dígitos para identificar el zapato.');
+      if (codigo.length !== 4) {
+        alert('El código debe tener exactamente 4 dígitos.');
         return;
       }
 
-      if (!nombre || precio <= 0) {
-        alert('Ingresa el modelo y el precio de venta público.');
-        return;
-      }
-
+      const db = window.appDb;
+      const uid = window.currentUser.uid;
       let agregados = 0;
 
-      if (tipo === 'custom') {
-        const customTalla = document.getElementById('custom-talla-num').value.trim();
-        const customQty = parseInt(document.getElementById('custom-talla-qty').value) || 0;
+      try {
+        if (tipo === 'custom') {
+          const customTalla = document.getElementById('custom-talla-num').value.trim();
+          const customQty = parseInt(document.getElementById('custom-talla-qty').value) || 0;
 
-        if (!customTalla || customQty <= 0) {
-          alert('Ingresa la talla especial y la cantidad de pares.');
+          if (!customTalla || customQty <= 0) {
+            alert('Ingresa la talla especial y la cantidad de pares.');
+            return;
+          }
+
+          const id = `prod_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+          const nuevoProd = { id, codigo, nombre, talla: `Talla ${customTalla}`, costo, precio, stock: customQty };
+          await setDoc(doc(db, `usuarios/${uid}/productos`, id), nuevoProd);
+          agregados++;
+        } else {
+          const inputsTallas = document.querySelectorAll('.input-talla-stock');
+          for (let i = 0; i < inputsTallas.length; i++) {
+            const stock = parseInt(inputsTallas[i].value) || 0;
+            const talla = inputsTallas[i].dataset.talla;
+
+            if (stock > 0) {
+              const existe = state.productos.find(p => p.codigo === codigo && p.talla === `Talla ${talla}`);
+              const id = existe ? existe.id : `prod_${Date.now()}_${i}_${Math.floor(Math.random() * 1000)}`;
+              const stockFinal = existe ? Number(existe.stock) + stock : stock;
+
+              const prodData = { id, codigo, nombre, talla: `Talla ${talla}`, costo, precio, stock: stockFinal };
+              await setDoc(doc(db, `usuarios/${uid}/productos`, id), prodData);
+              agregados++;
+            }
+          }
+        }
+
+        if (agregados === 0) {
+          alert('Ingresa al menos un par disponible en alguna talla.');
           return;
         }
 
-        productos.push({
-          id: 'prod_' + Date.now() + '_' + Math.floor(Math.random() * 10000),
-          codigo,
-          nombre,
-          talla: `Talla ${customTalla}`,
-          costo,
-          precio,
-          stock: customQty
-        });
-        agregados++;
-      } else {
-        const inputsTallas = document.querySelectorAll('.input-talla-stock');
-        inputsTallas.forEach((input, index) => {
-          const stock = parseInt(input.value) || 0;
-          const talla = input.getAttribute('data-talla');
-
-          if (stock > 0) {
-            const existe = productos.find(p => p.codigo === codigo && p.talla === `Talla ${talla}`);
-            if (existe) {
-              existe.stock += stock;
-              existe.precio = precio;
-              existe.costo = costo;
-            } else {
-              productos.push({
-                id: 'prod_' + Date.now() + '_' + index + '_' + Math.floor(Math.random() * 1000),
-                codigo,
-                nombre,
-                talla: `Talla ${talla}`,
-                costo,
-                precio,
-                stock
-              });
-            }
-            agregados++;
-          }
-        });
+        e.target.reset();
+        generarCamposTallas();
+        formProducto.classList.add('hidden');
+        alert(`¡Éxito! Referencia ${nombre} registrada correctamente.`);
+      } catch (error) {
+        console.error("Error al guardar producto:", error);
+        alert("Hubo un error al registrar el producto en la nube.");
       }
+    });
 
-      if (agregados === 0) {
-        alert('Ingresa la cantidad de pares disponibles en al menos una talla.');
-        return;
-      }
-
-      guardarLocalStorage();
-      
-      document.getElementById('prod-codigo').value = '';
-      document.getElementById('prod-nombre').value = '';
-      document.getElementById('prod-costo').value = '';
-      document.getElementById('prod-precio').value = '';
-      generarCamposTallas();
-      toggleFormProducto();
-      
-      init();
-      alert(`¡Éxito! Se registraron las tallas para ${nombre} (Código: #${codigo}).`);
+    // --- RENDERIZADO DE INTERFAZ ---
+    function actualizarInterfaz() {
+      renderDashboard();
+      renderInventario();
+      renderVentas();
+      renderDevoluciones();
     }
 
     function renderDashboard() {
-      const totalProds = productos.length;
-      const totalUnits = productos.reduce((acc, p) => acc + Number(p.stock), 0);
-      const lowStock = productos.filter(p => p.stock <= 2);
-      const ventasHoy = ventas.reduce((acc, v) => acc + Number(v.total), 0);
-      const devsPendientes = devoluciones.filter(d => !d.reintegrado).length;
+      const totalProds = state.productos.length;
+      const totalUnits = state.productos.reduce((acc, p) => acc + Number(p.stock), 0);
+      const lowStock = state.productos.filter(p => p.stock <= 2);
+      const ventasTotal = state.ventas.reduce((acc, v) => acc + Number(v.total), 0);
+      const devsPendientes = state.devoluciones.filter(d => !d.reintegrado).length;
 
-      document.getElementById('dash-total-prods').innerText = totalProds;
-      document.getElementById('dash-total-units').innerText = totalUnits;
-      document.getElementById('dash-ventas-hoy').innerText = `$${ventasHoy.toLocaleString('es-CO')}`;
-      document.getElementById('dash-dev-pendientes').innerText = devsPendientes;
+      document.getElementById('dash-total-prods').textContent = totalProds;
+      document.getElementById('dash-total-units').textContent = totalUnits;
+      document.getElementById('dash-ventas-hoy').textContent = `$${ventasTotal.toLocaleString('es-CO')}`;
+      document.getElementById('dash-dev-pendientes').textContent = devsPendientes;
 
       const alertTitle = document.getElementById('dash-alert-title');
       const alertList = document.getElementById('dash-alert-list');
 
-      if (productos.length === 0) {
+      if (totalProds === 0) {
         alertTitle.className = "text-sm font-bold text-slate-300 flex items-center space-x-2";
         alertTitle.innerHTML = `<i class="fa-solid fa-boxes-stacked text-slate-400"></i><span>Inventario Vacío</span>`;
-        alertList.innerHTML = `<p class="text-slate-400 font-normal">Aún no has ingresado zapatillas al stock. Haz clic en "Ver / Agregar Stock" para registrar la primera referencia.</p>`;
+        alertList.innerHTML = `<p class="text-slate-400 font-normal">Aún no has ingresado zapatillas al stock. Haz clic en "Ver / Agregar Stock" para registrar tu primera referencia.</p>`;
       } else if (lowStock.length === 0) {
         alertTitle.className = "text-sm font-bold text-emerald-400 flex items-center space-x-2";
         alertTitle.innerHTML = `<i class="fa-solid fa-circle-check"></i><span>Inventario en Buen Estado</span>`;
-        alertList.innerHTML = `<p class="text-slate-400 font-normal">Todas las referencias registradas cuentan con suficiente disponibilidad de pares 👍</p>`;
+        alertList.innerHTML = `<p class="text-slate-400 font-normal">Todas las referencias cuentan con suficiente disponibilidad 👍</p>`;
       } else {
         alertTitle.className = "text-sm font-bold text-amber-400 flex items-center space-x-2";
         alertTitle.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-amber-500"></i><span>⚠️ Alerta: Inventario Bajo / Agotado</span>`;
         alertList.innerHTML = lowStock.map(p => `
           <div class="flex justify-between items-center bg-amber-950/30 p-2.5 rounded-lg border border-amber-800/40">
             <div>
-              <span class="font-bold font-mono text-xs bg-slate-700 text-slate-200 px-1.5 py-0.5 rounded mr-1">#${p.codigo || 'S/C'}</span>
+              <span class="font-bold font-mono text-xs bg-slate-700 text-slate-200 px-1.5 py-0.5 rounded mr-1">#${p.codigo}</span>
               <span class="font-semibold text-slate-200">${p.nombre}</span>
               <span class="text-slate-400 font-normal">(${p.talla})</span>
             </div>
             <span class="font-bold ${p.stock === 0 ? 'text-red-400 bg-red-950/50 px-2 py-0.5 rounded' : 'text-amber-400'}">
-              ${p.stock === 0 ? '¡Agotado! (0 pares)' : `${p.stock} pares restantes`}
+              ${p.stock === 0 ? '¡Agotado!' : `${p.stock} pares restantes`}
             </span>
           </div>
         `).join('');
       }
     }
 
+    const searchInventoryInput = document.getElementById('search-inventory');
+    searchInventoryInput.addEventListener('input', renderInventario);
+
     function renderInventario() {
-      const search = document.getElementById('search-inventory').value.toLowerCase().trim();
+      const search = searchInventoryInput.value.toLowerCase().trim();
       const tbody = document.getElementById('inventory-table-body');
       
-      const filtered = productos.filter(p => 
+      const filtered = state.productos.filter(p => 
         (p.codigo && p.codigo.toLowerCase().includes(search)) ||
         p.nombre.toLowerCase().includes(search) || 
         p.talla.toLowerCase().includes(search)
       );
 
       if (filtered.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-slate-500 font-medium">No se encontraron zapatillas con ese criterio de búsqueda.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-slate-500 font-medium">No se encontraron zapatillas con ese criterio.</td></tr>`;
         return;
       }
 
       tbody.innerHTML = filtered.map(p => `
         <tr class="hover:bg-slate-700/40 transition-colors">
-          <td class="p-3 font-mono font-bold text-emerald-400">#${p.codigo || '0000'}</td>
+          <td class="p-3 font-mono font-bold text-emerald-400">#${p.codigo}</td>
           <td class="p-3 font-semibold text-slate-100">${p.nombre}</td>
           <td class="p-3"><span class="bg-slate-700 text-slate-300 px-2 py-0.5 rounded text-[10px] font-medium">${p.talla}</span></td>
           <td class="p-3 text-right font-medium">$${Number(p.precio).toLocaleString('es-CO')}</td>
@@ -725,76 +703,70 @@
             <span class="font-bold ${p.stock === 0 ? 'text-red-400 bg-red-950/40 px-2 py-0.5 rounded' : p.stock <= 2 ? 'text-amber-400 bg-amber-950/40 px-2 py-0.5 rounded' : 'text-slate-300'}">${p.stock}</span>
           </td>
           <td class="p-3 text-center space-x-1">
-            <button onclick="venderDirecto('${p.id}')" title="Registrar Venta Directa" class="bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-1 rounded text-[11px] font-medium transition-colors">
+            <button onclick="window.venderProducto('${p.id}')" class="bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-1 rounded text-[11px] font-medium transition-colors">
               <i class="fa-solid fa-cart-shopping mr-1"></i>Vender
             </button>
-            <button onclick="eliminarProducto('${p.id}')" title="Eliminar" class="text-slate-400 hover:text-red-400 p-1"><i class="fa-regular fa-trash-can"></i></button>
+            <button onclick="window.eliminarProducto('${p.id}')" class="text-slate-400 hover:text-red-400 p-1"><i class="fa-regular fa-trash-can"></i></button>
           </td>
         </tr>
       `).join('');
     }
 
-    function toggleFormProducto() {
-      document.getElementById('form-producto').classList.toggle('hidden');
-    }
-
-    function venderDirecto(id) {
-      const prod = productos.find(p => p.id === id);
-      if (!prod) return;
-
-      if (prod.stock <= 0) {
-        alert('Esta zapatilla no tiene pares disponibles en stock.');
+    window.venderProducto = async function(id) {
+      const prod = state.productos.find(p => p.id === id);
+      if (!prod || prod.stock <= 0) {
+        alert('Este producto no tiene stock disponible.');
         return;
       }
 
-      const cantStr = prompt(`Registrar venta de:\n#${prod.codigo} - ${prod.nombre} (${prod.talla})\nStock disponible: ${prod.stock} pares\n\n¿Cuántos pares vas a vender?`, "1");
+      const cantStr = prompt(`Venta de: #${prod.codigo} - ${prod.nombre} (${prod.talla})\nDisponibles: ${prod.stock}\n\n¿Cuántos pares vas a vender?`, "1");
       if (!cantStr) return;
 
-      const cant = parseInt(cantStr);
-      if (isNaN(cant) || cant <= 0) {
-        alert('Cantidad inválida.');
+      const cantidad = parseInt(cantStr);
+      if (isNaN(cantidad) || cantidad <= 0 || cantidad > prod.stock) {
+        alert('Cantidad inválida o superior al stock actual.');
         return;
       }
 
-      if (cant > prod.stock) {
-        alert(`No puedes vender ${cant} pares porque solo hay ${prod.stock} disponibles en stock.`);
-        return;
-      }
+      const db = window.appDb;
+      const uid = window.currentUser.uid;
 
-      prod.stock -= cant;
-      const totalVenta = prod.precio * cant;
+      prod.stock -= cantidad;
+      await setDoc(doc(db, `usuarios/${uid}/productos`, prod.id), prod);
 
-      ventas.unshift({
-        id: 'sale_' + Date.now(),
+      const totalVenta = prod.precio * cantidad;
+      const saleId = `sale_${Date.now()}`;
+      const nuevaVenta = {
+        id: saleId,
         productoId: prod.id,
         codigo: prod.codigo,
         nombre: prod.nombre,
         talla: prod.talla,
-        cantidad: cant,
+        cantidad,
         precioUnitario: prod.precio,
-        fecha: obtenerFechaFormateada(),
-        concepto: `[#${prod.codigo}] ${prod.nombre} (${prod.talla}) x${cant} par(es)`,
+        fecha: new Date().toLocaleString(),
+        concepto: `[#${prod.codigo}] ${prod.nombre} (${prod.talla}) x${cantidad}`,
         total: totalVenta
-      });
+      };
 
-      guardarLocalStorage();
-      init();
-      alert(`✅ Venta registrada exitosamente. $${totalVenta.toLocaleString('es-CO')} ingresados.`);
-    }
+      await setDoc(doc(db, `usuarios/${uid}/ventas`, saleId), nuevaVenta);
+      alert(`✅ Venta registrada con éxito por $${totalVenta.toLocaleString('es-CO')}`);
+    };
 
     function renderVentas() {
       const tbody = document.getElementById('sales-table-body');
-      if (ventas.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-slate-500 font-medium">No hay ventas registradas todavía.</td></tr>`;
+      if (state.ventas.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-slate-500 font-medium">No hay ventas registradas.</td></tr>`;
         return;
       }
-      tbody.innerHTML = ventas.map((v, idx) => `
+
+      tbody.innerHTML = state.ventas.map(v => `
         <tr class="hover:bg-slate-700/40">
           <td class="p-3 text-slate-500 font-mono text-[11px]">${v.fecha}</td>
           <td class="p-3 font-medium text-slate-200">${v.concepto}</td>
           <td class="p-3 text-right font-bold text-emerald-400">$${Number(v.total).toLocaleString('es-CO')}</td>
           <td class="p-3 text-center">
-            <button onclick="procesarDevolucion(${idx})" title="Devolver Par al Inventario" class="bg-amber-600/80 hover:bg-amber-600 text-white px-2 py-1 rounded text-[11px] font-medium transition-colors">
+            <button onclick="window.procesarDevolucion('${v.id}')" class="bg-amber-600/80 hover:bg-amber-600 text-white px-2 py-1 rounded text-[11px] font-medium transition-colors">
               <i class="fa-solid fa-rotate-left mr-1"></i>Devolver
             </button>
           </td>
@@ -802,121 +774,114 @@
       `).join('');
     }
 
-    function procesarDevolucion(index) {
-      const v = ventas[index];
-      if (!v) return;
+    window.procesarDevolucion = async function(saleId) {
+      const venta = state.ventas.find(v => v.id === saleId);
+      if (!venta) return;
 
-      const motivo = prompt(`Devolución de la venta:\n${v.concepto}\n\nIngresa la razón de la devolución (ej: "Cliente no regresó por el pedido", "Cambio por garantía"):`, "Cliente no regresó por el pedido");
+      const motivo = prompt(`Motivo de la devolución para ${venta.concepto}:`, "Cliente no regresó por el pedido");
       if (motivo === null) return;
 
-      devoluciones.unshift({
-        id: 'dev_' + Date.now(),
-        codigo: v.codigo,
-        nombre: v.nombre,
-        talla: v.talla,
-        cantidad: v.cantidad || 1,
-        precioUnitario: v.precioUnitario || (v.total / (v.cantidad || 1)),
-        total: v.total,
+      const db = window.appDb;
+      const uid = window.currentUser.uid;
+      const devId = `dev_${Date.now()}`;
+
+      const nuevaDev = {
+        id: devId,
+        codigo: venta.codigo,
+        nombre: venta.nombre,
+        talla: venta.talla,
+        cantidad: venta.cantidad,
+        precioUnitario: venta.precioUnitario,
+        total: venta.total,
         motivo: motivo || "Sin especificar",
-        fechaDevolucion: obtenerFechaFormateada(),
+        fechaDevolucion: new Date().toLocaleString(),
         reintegrado: false
-      });
+      };
 
-      ventas.splice(index, 1);
-
-      guardarLocalStorage();
-      init();
-      alert(`↩️ Devolución enviada a la pestaña "Devoluciones". Recuerda hacer clic en "Reintegrar al Stock".`);
-    }
+      await setDoc(doc(db, `usuarios/${uid}/devoluciones`, devId), nuevaDev);
+      await deleteDoc(doc(db, `usuarios/${uid}/ventas`, venta.id));
+      alert(`↩️ Devolución registrada. Ve a la pestaña "Devoluciones" para reintegrarla al stock.`);
+    };
 
     function renderDevoluciones() {
       const tbody = document.getElementById('returns-table-body');
-      if (devoluciones.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-slate-500 font-medium">No hay devoluciones registradas por el momento.</td></tr>`;
+      if (state.devoluciones.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-slate-500 font-medium">No hay devoluciones registradas.</td></tr>`;
         return;
       }
 
-      tbody.innerHTML = devoluciones.map((d, idx) => `
+      tbody.innerHTML = state.devoluciones.map(d => `
         <tr class="hover:bg-slate-700/40">
           <td class="p-3 text-slate-500 font-mono text-[11px]">${d.fechaDevolucion}</td>
-          <td class="p-3 font-medium text-slate-200">[#${d.codigo || '0000'}] ${d.nombre} (${d.talla}) - x${d.cantidad} par(es)</td>
+          <td class="p-3 font-medium text-slate-200">[#${d.codigo}] ${d.nombre} (${d.talla}) - x${d.cantidad}</td>
           <td class="p-3 text-slate-400 italic">${d.motivo}</td>
           <td class="p-3 text-center">
-            ${d.reintegrado 
-              ? `<span class="bg-emerald-950/60 text-emerald-400 px-2 py-0.5 rounded text-[10px] font-bold">✅ Reintegrado</span>`
-              : `<span class="bg-amber-950/60 text-amber-400 px-2 py-0.5 rounded text-[10px] font-bold">⏳ Pendiente</span>`
-            }
+            ${d.reintegrado ? `<span class="bg-emerald-950/65 text-emerald-400 px-2 py-0.5 rounded text-[10px] font-bold">✅ Reintegrado</span>` : `<span class="bg-amber-950/65 text-amber-400 px-2 py-0.5 rounded text-[10px] font-bold">⏳ Pendiente</span>`}
           </td>
           <td class="p-3 text-center">
-            ${!d.reintegrado ? `
-              <button onclick="reintegrarAlStock(${idx})" title="Reintegrar par al inventario" class="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 rounded text-[11px] font-bold transition-colors">
-                <i class="fa-solid fa-box-archive mr-1"></i>Reintegrar al Stock
-              </button>
-            ` : `<span class="text-slate-500 text-[11px]">En Inventario</span>`}
+            ${!d.reintegrado ? `<button onclick="window.reintegrarAlStock('${d.id}')" class="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 rounded text-[11px] font-bold transition-colors"><i class="fa-solid fa-box-archive mr-1"></i>Reintegrar</button>` : `<span class="text-slate-500 text-[11px]">Completado</span>`}
           </td>
         </tr>
       `).join('');
     }
 
-    function reintegrarAlStock(index) {
-      const d = devoluciones[index];
-      if (!d) return;
+    window.reintegrarAlStock = async function(devId) {
+      const dev = state.devoluciones.find(d => d.id === devId);
+      if (!dev) return;
 
-      let prod = productos.find(p => p.codigo === d.codigo && p.talla === d.talla);
+      const db = window.appDb;
+      const uid = window.currentUser.uid;
+      let prod = state.productos.find(p => p.codigo === dev.codigo && p.talla === dev.talla);
 
       if (prod) {
-        prod.stock += d.cantidad;
+        prod.stock += dev.cantidad;
+        await setDoc(doc(db, `usuarios/${uid}/productos`, prod.id), prod);
       } else {
-        productos.push({
-          id: 'prod_' + Date.now(),
-          codigo: d.codigo,
-          nombre: d.nombre,
-          talla: d.talla,
+        const id = `prod_${Date.now()}`;
+        const nuevoProd = {
+          id,
+          codigo: dev.codigo,
+          nombre: dev.nombre,
+          talla: dev.talla,
           costo: 0,
-          precio: d.precioUnitario || 0,
-          stock: d.cantidad
-        });
+          precio: dev.precioUnitario,
+          stock: dev.cantidad
+        };
+        await setDoc(doc(db, `usuarios/${uid}/productos`, id), nuevoProd);
       }
 
-      d.reintegrado = true;
+      dev.reintegrado = true;
+      await setDoc(doc(db, `usuarios/${uid}/devoluciones`, dev.id), dev);
+      alert(`📦 Stock reintegrado exitosamente.`);
+    };
 
-      guardarLocalStorage();
-      init();
-      alert(`📦 ¡Éxito! ${d.cantidad} par(es) de [#${d.codigo}] ${d.nombre} (${d.talla}) han sido reintegrados al stock.`);
-    }
-
-    function eliminarProducto(id) {
-      if (confirm('¿Eliminar esta talla/referencia del inventario?')) {
-        productos = productos.filter(p => p.id !== id);
-        guardarLocalStorage();
-        init();
+    window.eliminarProducto = async function(id) {
+      if (confirm('¿Estás seguro de eliminar este producto del inventario?')) {
+        const db = window.appDb;
+        const uid = window.currentUser.uid;
+        await deleteDoc(doc(db, `usuarios/${uid}/productos`, id));
       }
-    }
+    };
 
-    function exportarCSV() {
-      if (ventas.length === 0) {
-        alert('No hay datos de ventas para exportar.');
+    document.getElementById('export-csv-btn').addEventListener('click', () => {
+      if (state.ventas.length === 0) {
+        alert('No hay ventas registradas para exportar.');
         return;
       }
       let csv = 'Fecha,Detalle,Total\n';
-      ventas.forEach(v => {
+      state.ventas.forEach(v => {
         csv += `"${v.fecha}","${v.concepto}",${v.total}\n`;
       });
       const blob = new Blob([csv], { type: 'text/csv' });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.setAttribute('href', url);
-      a.setAttribute('download', 'Ventas_Vitrina.csv');
+      a.href = url;
+      a.download = 'Ventas_Vitrina.csv';
       a.click();
-    }
+    });
 
-    function guardarLocalStorage() {
-      localStorage.setItem(KEY_PRODS, JSON.stringify(productos));
-      localStorage.setItem(KEY_VENTAS, JSON.stringify(ventas));
-      localStorage.setItem(KEY_DEVS, JSON.stringify(devoluciones));
-    }
-
-    init();
+    // Inicializar campos de tallas al cargar
+    generarCamposTallas();
   </script>
 </body>
 </html>
