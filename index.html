@@ -57,14 +57,12 @@
 
         if (user) {
           window.currentUser = user;
-          // Recuperar datos de perfil y rol del usuario
           const userDoc = await getDoc(doc(window.appDb, "usuarios_meta", user.uid));
           if (userDoc.exists()) {
             window.userData = userDoc.data();
             document.getElementById('user-email-display').textContent = `${window.userData.nombreUsuario} (${window.userData.rol.toUpperCase()})`;
             document.getElementById('store-name-display').textContent = window.userData.tiendaId.toUpperCase();
             
-            // Aplicar restricciones de Rol
             aplicarRestriccionesRol(window.userData.rol);
 
             authModal.classList.add('hidden');
@@ -99,9 +97,7 @@
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen font-sans antialiased pb-28 md:pb-12 md:pt-20 flex flex-col justify-between">
 
-  <!-- ========================================== -->
-  <!-- MODAL GENERAL DEL SISTEMA (ALERT/CONFIRM) -->
-  <!-- ========================================== -->
+  <!-- MODAL GENERAL DEL SISTEMA -->
   <div id="vitrina-modal" class="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
     <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-sm w-full shadow-2xl space-y-4 text-center">
       <div id="vmodal-icon-container" class="w-12 h-12 rounded-2xl flex items-center justify-center text-xl mx-auto border shadow-md">
@@ -124,9 +120,7 @@
     </div>
   </div>
 
-  <!-- ========================================== -->
-  <!-- 1. MÓDULO DE AUTENTICACIÓN (MULTI-TENANT)   -->
-  <!-- ========================================== -->
+  <!-- 1. MÓDULO DE AUTENTICACIÓN -->
   <div id="auth-modal" class="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-50 flex items-center justify-center p-4">
     <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 md:p-8 max-w-md w-full shadow-2xl space-y-6">
       <div class="text-center space-y-2">
@@ -162,7 +156,6 @@
           </div>
         </div>
 
-        <!-- Campos dinámicos para Registro Maestro -->
         <div id="auth-extra-fields" class="hidden space-y-4 pt-1 border-t border-slate-700/60">
           <div>
             <label class="block text-xs font-semibold text-emerald-400 mb-1">ID de Vitrina (Código Único de Tienda)</label>
@@ -195,9 +188,7 @@
     </div>
   </div>
 
-  <!-- ========================================== -->
-  <!-- 2. CONTENIDO PRINCIPAL                    -->
-  <!-- ========================================== -->
+  <!-- 2. CONTENIDO PRINCIPAL -->
   <div id="app-content" class="hidden flex-grow flex flex-col justify-between">
     
     <header class="fixed top-0 left-0 right-0 bg-slate-800 border-b border-slate-700 z-40 px-4 py-3 flex items-center justify-between shadow-md">
@@ -233,7 +224,6 @@
             <h2 class="text-xl font-bold text-white">Resumen Comercial</h2>
             <p class="text-xs text-slate-400">Control de ventas, stock y devoluciones en tiempo real</p>
           </div>
-          <!-- BOTÓN SOLO ADMIN -->
           <button id="reset-bodega-btn" class="admin-only bg-red-950/60 hover:bg-red-900 border border-red-800/80 text-red-300 hover:text-red-100 text-[11px] px-3 py-1.5 rounded-lg font-medium flex items-center space-x-1.5 transition-all shadow-sm">
             <i class="fa-solid fa-trash-can"></i><span>Limpiar Bodega</span>
           </button>
@@ -250,11 +240,6 @@
           <button data-tab="inventario" class="nav-trigger flex items-center justify-center space-x-2 bg-emerald-600 hover:bg-emerald-700 text-white p-3.5 rounded-xl font-semibold shadow-lg shadow-emerald-600/20 transition-all"><i class="fa-solid fa-shoe-prints text-lg"></i><span class="text-sm">Ver / Agregar Stock</span></button>
           <button data-tab="caja" class="nav-trigger flex items-center justify-center space-x-2 bg-slate-700 hover:bg-slate-600 text-white p-3.5 rounded-xl font-semibold shadow-md transition-all"><i class="fa-solid fa-receipt text-sm"></i><span class="text-sm">Ver Ventas & Devolver</span></button>
         </div>
-
-        <div class="bg-slate-800 rounded-xl border border-slate-700 p-4 shadow-sm space-y-3">
-          <h3 id="dash-alert-title" class="text-sm font-bold flex items-center space-x-2"></h3>
-          <div id="dash-alert-list" class="space-y-2 text-xs"></div>
-        </div>
       </section>
 
       <!-- INVENTARIO -->
@@ -264,7 +249,6 @@
             <h2 class="text-xl font-bold text-white">Inventario de Zapatillas</h2>
             <p class="text-xs text-slate-400">Administra códigos, modelos y curva de tallas</p>
           </div>
-          <!-- BOTÓN SOLO ADMIN -->
           <button id="toggle-form-btn" class="admin-only bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-2 rounded-lg font-medium flex items-center space-x-1"><i class="fa-solid fa-plus"></i><span>Nueva Zapatilla</span></button>
         </div>
 
@@ -322,7 +306,6 @@
                   <th class="p-3">Código</th>
                   <th class="p-3">Modelo</th>
                   <th class="p-3">Talla</th>
-                  <!-- Ocultar columna costo para Vendedores -->
                   <th class="p-3 text-right admin-only">Costo</th>
                   <th class="p-3 text-right">Precio Venta</th>
                   <th class="p-3 text-center">Stock</th>
@@ -414,9 +397,7 @@
     </nav>
   </div>
 
-  <!-- ========================================== -->
-  <!-- 3. LÓGICA DE APLICACIÓN                    -->
-  <!-- ========================================== -->
+  <!-- 3. LÓGICA DE APLICACIÓN -->
   <script type="module">
     import { 
       collection, 
@@ -576,7 +557,7 @@
       location.reload();
     });
 
-    // SINCRONIZACIÓN CLOUD POR TIENDA (MULTI-TENANT)
+    // SINCRONIZACIÓN EN TIEMPO REAL (CORREGIDO PARA ACTUALIZAR TABLAS AUTOMÁTICAMENTE)
     window.iniciarSincronizacionCloud = function(tiendaId) {
       const db = window.appDb;
       if (!db) return;
@@ -588,10 +569,12 @@
         state.productos = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
         actualizarInterfaz();
       });
+
       const unsubVentas = onSnapshot(collection(db, `tiendas/${tiendaId}/ventas`), (snapshot) => {
         state.ventas = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
         actualizarInterfaz();
       });
+
       const unsubDevs = onSnapshot(collection(db, `tiendas/${tiendaId}/devoluciones`), (snapshot) => {
         state.devoluciones = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
         actualizarInterfaz();
@@ -625,7 +608,7 @@
 
     document.querySelectorAll('[data-tab]').forEach(el => el.addEventListener('click', () => cambiarPestaña(el.dataset.tab)));
 
-    // GESTIÓN DE INVENTARIO (ADMIN ONLY)
+    // GESTIÓN DE INVENTARIO
     const tipoTallaSelect = document.getElementById('prod-tipo-talla');
     const contenedorTallas = document.getElementById('contenedor-tallas');
     const formProducto = document.getElementById('form-producto');
@@ -673,7 +656,6 @@
 
       const db = window.appDb;
       const tiendaId = window.userData.tiendaId;
-      let agregados = 0;
 
       try {
         if (tipo === 'custom') {
@@ -682,7 +664,6 @@
           if (!customTalla || customQty <= 0) return;
           const id = `prod_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
           await setDoc(doc(db, `tiendas/${tiendaId}/productos`, id), { id, codigo, nombre, talla: `Talla ${customTalla}`, costo, precio, stock: customQty });
-          agregados++;
         } else {
           const inputsTallas = document.querySelectorAll('.input-talla-stock');
           for (let i = 0; i < inputsTallas.length; i++) {
@@ -693,7 +674,6 @@
               const id = existe ? existe.id : `prod_${Date.now()}_${i}_${Math.floor(Math.random() * 1000)}`;
               const stockFinal = existe ? Number(existe.stock) + stock : stock;
               await setDoc(doc(db, `tiendas/${tiendaId}/productos`, id), { id, codigo, nombre, talla: `Talla ${talla}`, costo, precio, stock: stockFinal });
-              agregados++;
             }
           }
         }
@@ -707,7 +687,7 @@
       }
     });
 
-    // RENDERIZADO INTERFAZ
+    // RENDERIZADO GENERAL DE LA INTERFAZ
     function actualizarInterfaz() {
       renderDashboard();
       renderInventario();
@@ -718,7 +698,6 @@
     function renderDashboard() {
       const totalProds = state.productos.length;
       const totalUnits = state.productos.reduce((acc, p) => acc + Number(p.stock), 0);
-      const lowStock = state.productos.filter(p => p.stock <= 2);
       const ventasTotal = state.ventas.reduce((acc, v) => acc + Number(v.total), 0);
       const devsPendientes = state.devoluciones.filter(d => !d.reintegrado).length;
 
@@ -758,7 +737,7 @@
         </tr>`).join('');
     }
 
-    // VENTA FLEXIBLE CON PRECIO Y OBSERVACIONES
+    // REGISTRO DE VENTAS FLEXIBLES
     window.venderProducto = function(id) {
       const prod = state.productos.find(p => p.id === id);
       if (!prod || prod.stock <= 0) {
@@ -802,7 +781,7 @@
                 cantidad,
                 precioUnitario: totalVenta / cantidad,
                 vendedor: window.userData.nombreUsuario,
-                fecha: new Date().toLocaleString(),
+                fecha: new Date().toLocaleString('es-CO'),
                 concepto: `[#${prod.codigo}] ${prod.nombre} (${prod.talla}) x${cantidad}`,
                 total: totalVenta
               };
@@ -830,6 +809,61 @@
         </tr>`).join('');
     }
 
+    // GENERACIÓN Y DESCARGA DE REPORTE PDF (CORREGIDO)
+    document.getElementById('export-pdf-btn').addEventListener('click', () => {
+      if (state.ventas.length === 0) {
+        mostrarModal({ title: "Sin Registro", message: "No hay ventas registradas para generar el PDF.", type: "warning" });
+        return;
+      }
+
+      const tienda = window.userData ? window.userData.tiendaId.toUpperCase() : "VITRINA";
+      const totalAcumulado = state.ventas.reduce((acc, v) => acc + Number(v.total), 0);
+
+      const element = document.createElement('div');
+      element.className = "p-6 bg-white text-slate-900 font-sans space-y-4";
+      element.innerHTML = `
+        <div style="border-bottom: 2px solid #059669; padding-bottom: 12px; margin-bottom: 16px;">
+          <h1 style="font-size: 22px; font-weight: bold; color: #059669; margin: 0;">Reporte Oficial de Ventas - ${tienda}</h1>
+          <p style="font-size: 11px; color: #64748b; margin-top: 4px;">Generado por: ${window.userData.nombreUsuario} | Fecha: ${new Date().toLocaleString('es-CO')}</p>
+        </div>
+
+        <table style="width: 100%; border-collapse: collapse; font-size: 11px; text-align: left;">
+          <thead>
+            <tr style="background-color: #f1f5f9; color: #334155; text-transform: uppercase;">
+              <th style="padding: 8px; border: 1px solid #cbd5e1;">Fecha</th>
+              <th style="padding: 8px; border: 1px solid #cbd5e1;">Detalle del Producto</th>
+              <th style="padding: 8px; border: 1px solid #cbd5e1;">Vendedor</th>
+              <th style="padding: 8px; border: 1px solid #cbd5e1; text-align: right;">Total ($)</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${state.ventas.map(v => `
+              <tr>
+                <td style="padding: 8px; border: 1px solid #e2e8f0;">${v.fecha}</td>
+                <td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: bold;">${v.concepto}</td>
+                <td style="padding: 8px; border: 1px solid #e2e8f0;">${v.vendedor || 'Sistema'}</td>
+                <td style="padding: 8px; border: 1px solid #e2e8f0; text-align: right; font-weight: bold;">$${Number(v.total).toLocaleString('es-CO')}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+
+        <div style="text-align: right; margin-top: 20px; font-size: 14px; font-weight: bold; color: #059669;">
+          Total Acumulado en Caja: $${totalAcumulado.toLocaleString('es-CO')}
+        </div>
+      `;
+
+      const options = {
+        margin: 10,
+        filename: `Reporte_Ventas_${tienda}_${Date.now()}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2 },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      };
+
+      html2pdf().set(options).from(element).save();
+    });
+
     // DEVOLUCIONES
     window.procesarDevolucion = function(saleId) {
       const venta = state.ventas.find(v => v.id === saleId);
@@ -855,7 +889,7 @@
             precioUnitario: venta.precioUnitario,
             total: venta.total,
             motivo: motivo || "Sin especificar",
-            fechaDevolucion: new Date().toLocaleString(),
+            fechaDevolucion: new Date().toLocaleString('es-CO'),
             reintegrado: false
           });
 
