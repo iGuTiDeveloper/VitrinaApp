@@ -3,18 +3,18 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Vitrina - Control Comercial & Devoluciones</title>
+  <title>Vitrina v1.1 - Sistema Multi-tienda & Roles</title>
   
   <!-- FAVICON -->
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='25' fill='%23059669'/><path d='M22 62c2-8 9-14 18-14h18c7 0 13-4 16-10 2-4 6-6 10-5 5 2 7 8 5 13l-4 11c-2 5-7 8-12 8H28c-4 0-7-2-8-6l2-7z' fill='none' stroke='white' stroke-width='6' stroke-linecap='round' stroke-linejoin='round'/><circle cx='36' cy='62' r='4' fill='white'/><circle cx='52' cy='62' r='4' fill='white'/><circle cx='68' cy='62' r='4' fill='white'/></svg>">
 
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  
-  <!-- LIBRERÍA PARA GENERACIÓN DE PDF DESDE NAVEGADOR -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
-  <!-- FIREBASE SDKs (v10) -->
+  <!-- ========================================== -->
+  <!-- CONFIGURACIÓN INICIAL DE FIREBASE (SDK v10)-->
+  <!-- ========================================== -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { 
@@ -29,12 +29,12 @@
       collection, 
       doc, 
       setDoc, 
+      getDoc,
       getDocs,
       deleteDoc, 
       onSnapshot 
     } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-    // Configuración de Firebase
     const firebaseConfig = {
       apiKey: "AIzaSyCVyG2UTL7fLXiJJSIvEvYVZzPB5668r8Y",
       authDomain: "vitrinaapp-9da79.firebaseapp.com",
@@ -47,28 +47,35 @@
 
     try {
       const app = initializeApp(firebaseConfig);
-      const auth = getAuth(app);
-      const db = getFirestore(app);
-
-      window.appAuth = auth;
-      window.appDb = db;
+      window.appAuth = getAuth(app);
+      window.appDb = getFirestore(app);
       window.isFirebaseActive = true;
 
-      onAuthStateChanged(auth, (user) => {
+      onAuthStateChanged(window.appAuth, async (user) => {
         const authModal = document.getElementById('auth-modal');
         const appContent = document.getElementById('app-content');
-        const userEmailDisplay = document.getElementById('user-email-display');
 
         if (user) {
           window.currentUser = user;
-          authModal.classList.add('hidden');
-          appContent.classList.remove('hidden');
-          userEmailDisplay.textContent = user.email;
-          if (window.iniciarSincronizacionCloud) {
-            window.iniciarSincronizacionCloud(user.uid);
+          // Recuperar datos de perfil y rol del usuario
+          const userDoc = await getDoc(doc(window.appDb, "usuarios_meta", user.uid));
+          if (userDoc.exists()) {
+            window.userData = userDoc.data();
+            document.getElementById('user-email-display').textContent = `${window.userData.nombreUsuario} (${window.userData.rol.toUpperCase()})`;
+            document.getElementById('store-name-display').textContent = window.userData.tiendaId.toUpperCase();
+            
+            // Aplicar restricciones de Rol
+            aplicarRestriccionesRol(window.userData.rol);
+
+            authModal.classList.add('hidden');
+            appContent.classList.remove('hidden');
+            if (window.iniciarSincronizacionCloud) {
+              window.iniciarSincronizacionCloud(window.userData.tiendaId);
+            }
           }
         } else {
           window.currentUser = null;
+          window.userData = null;
           authModal.classList.remove('hidden');
           appContent.classList.add('hidden');
         }
@@ -77,23 +84,68 @@
       console.error("Error al inicializar Firebase:", error);
       window.isFirebaseActive = false;
     }
+
+    function aplicarRestriccionesRol(rol) {
+      const adminOnlyElements = document.querySelectorAll('.admin-only');
+      adminOnlyElements.forEach(el => {
+        if (rol === 'admin') {
+          el.classList.remove('hidden');
+        } else {
+          el.classList.add('hidden');
+        }
+      });
+    }
   </script>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen font-sans antialiased pb-28 md:pb-12 md:pt-20 flex flex-col justify-between">
 
-  <!-- MODAL DE AUTENTICACIÓN -->
+  <!-- ========================================== -->
+  <!-- MODAL GENERAL DEL SISTEMA (ALERT/CONFIRM) -->
+  <!-- ========================================== -->
+  <div id="vitrina-modal" class="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-sm w-full shadow-2xl space-y-4 text-center">
+      <div id="vmodal-icon-container" class="w-12 h-12 rounded-2xl flex items-center justify-center text-xl mx-auto border shadow-md">
+        <i id="vmodal-icon" class="fa-solid fa-circle-info"></i>
+      </div>
+      <div class="space-y-1">
+        <h3 id="vmodal-title" class="text-lg font-bold text-white">Aviso</h3>
+        <p id="vmodal-message" class="text-xs text-slate-300 leading-relaxed"></p>
+      </div>
+      
+      <div id="vmodal-input-box" class="hidden space-y-2 pt-1 text-left">
+        <label id="vmodal-input-label" class="block text-[11px] font-semibold text-slate-300"></label>
+        <input type="text" id="vmodal-input-field" class="w-full p-2.5 bg-slate-700 text-white font-bold text-xs border border-slate-600 rounded-xl focus:border-emerald-500 focus:outline-none">
+      </div>
+
+      <div id="vmodal-buttons" class="grid grid-cols-2 gap-2 pt-2">
+        <button id="vmodal-btn-cancel" class="bg-slate-700 hover:bg-slate-600 text-slate-300 font-semibold py-2.5 rounded-xl text-xs transition-colors hidden">Cancelar</button>
+        <button id="vmodal-btn-ok" class="col-span-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-xl text-xs shadow-lg shadow-emerald-600/20 transition-colors">Aceptar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- 1. MÓDULO DE AUTENTICACIÓN (MULTI-TENANT)   -->
+  <!-- ========================================== -->
   <div id="auth-modal" class="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-50 flex items-center justify-center p-4">
     <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 md:p-8 max-w-md w-full shadow-2xl space-y-6">
-      
       <div class="text-center space-y-2">
         <div class="w-12 h-12 bg-emerald-600 text-white rounded-2xl flex items-center justify-center font-bold text-2xl mx-auto shadow-lg shadow-emerald-600/30">
           <i class="fa-solid fa-shoe-prints"></i>
         </div>
-        <h2 id="auth-title" class="text-2xl font-bold text-white">Iniciar Sesión en Vitrina</h2>
-        <p id="auth-subtitle" class="text-xs text-slate-400">Ingresa tus credenciales para acceder a tu bodega sincronizada</p>
+        <h2 id="auth-title" class="text-2xl font-bold text-white">Ingreso a Vitrina</h2>
+        <p id="auth-subtitle" class="text-xs text-slate-400">Ingresa tus credenciales y el ID de tu tienda</p>
       </div>
 
       <form id="auth-form" class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Nombre de Usuario</label>
+          <div class="relative">
+            <i class="fa-solid fa-user absolute left-3 top-3 text-slate-500 text-xs"></i>
+            <input type="text" id="auth-username" required placeholder="Ej: JuanAdmin / CarlosVendedor" class="w-full pl-9 pr-3 py-2.5 bg-slate-700 text-white border border-slate-600 rounded-xl text-xs focus:border-emerald-500 focus:outline-none">
+          </div>
+        </div>
+
         <div>
           <label class="block text-xs font-semibold text-slate-300 mb-1">Correo Electrónico</label>
           <div class="relative">
@@ -110,6 +162,24 @@
           </div>
         </div>
 
+        <!-- Campos dinámicos para Registro Maestro -->
+        <div id="auth-extra-fields" class="hidden space-y-4 pt-1 border-t border-slate-700/60">
+          <div>
+            <label class="block text-xs font-semibold text-emerald-400 mb-1">ID de Vitrina (Código Único de Tienda)</label>
+            <div class="relative">
+              <i class="fa-solid fa-store absolute left-3 top-3 text-slate-500 text-xs"></i>
+              <input type="text" id="auth-tienda-id" placeholder="Ej: manhattan-store" class="w-full pl-9 pr-3 py-2.5 bg-slate-700 text-white border border-slate-600 rounded-xl text-xs focus:border-emerald-500 focus:outline-none uppercase font-mono">
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Rol de Cuenta</label>
+            <select id="auth-rol" class="w-full p-2.5 bg-slate-700 text-white border border-slate-600 rounded-xl text-xs font-semibold">
+              <option value="admin">Administrador (Control Total)</option>
+              <option value="vendedor">Vendedor (Mostrador / Ventas)</option>
+            </select>
+          </div>
+        </div>
+
         <button type="submit" id="auth-btn-submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl text-xs shadow-lg shadow-emerald-600/20 transition-all flex items-center justify-center space-x-2">
           <span>Ingresar a la Bodega</span>
           <i class="fa-solid fa-arrow-right text-xs"></i>
@@ -118,94 +188,67 @@
 
       <div class="text-center pt-2 border-t border-slate-700/60 text-xs">
         <p id="auth-toggle-text" class="text-slate-400">
-          ¿No tienes una cuenta aún? 
-          <button type="button" id="auth-toggle-btn" class="text-emerald-400 hover:underline font-bold ml-1">Regístrate aquí</button>
+          ¿Registrar nueva tienda principal? 
+          <button type="button" id="auth-toggle-btn" class="text-emerald-400 hover:underline font-bold ml-1">Crear Cuenta Admin</button>
         </p>
       </div>
     </div>
   </div>
 
-  <!-- CONTENIDO PRINCIPAL DE LA APLICACIÓN -->
+  <!-- ========================================== -->
+  <!-- 2. CONTENIDO PRINCIPAL                    -->
+  <!-- ========================================== -->
   <div id="app-content" class="hidden flex-grow flex flex-col justify-between">
     
-    <!-- HEADER -->
     <header class="fixed top-0 left-0 right-0 bg-slate-800 border-b border-slate-700 z-40 px-4 py-3 flex items-center justify-between shadow-md">
       <div class="flex items-center space-x-3">
         <div class="w-9 h-9 bg-emerald-600 text-white rounded-xl flex items-center justify-center font-bold text-lg shadow-md shadow-emerald-600/30">
           <i class="fa-solid fa-shoe-prints text-sm"></i>
         </div>
         <div>
-          <h1 class="text-lg font-bold tracking-tight text-emerald-400 leading-none">Vit<span class="text-white">rina</span></h1>
-          <p class="text-[10px] text-slate-400 font-medium mt-0.5">Control Comercial & Devoluciones</p>
+          <h1 class="text-lg font-bold tracking-tight text-emerald-400 leading-none">Vit<span class="text-white">rina</span> <span class="text-[10px] text-xs font-mono bg-slate-700 text-emerald-300 px-1.5 py-0.5 rounded ml-1">v1.1</span></h1>
+          <p id="store-name-display" class="text-[10px] text-slate-400 font-bold uppercase mt-0.5"></p>
         </div>
       </div>
 
-      <!-- NAV ESCRITORIO -->
       <nav class="hidden md:flex items-center space-x-1 bg-slate-700/60 p-1 rounded-xl border border-slate-600">
-        <button data-tab="dashboard" class="nav-btn-desk flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-emerald-400 shadow-sm transition-all">
-          <i class="fa-solid fa-chart-pie"></i><span>Inicio</span>
-        </button>
-        <button data-tab="inventario" class="nav-btn-desk flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition-all">
-          <i class="fa-solid fa-shoe-prints"></i><span>Stock</span>
-        </button>
-        <button data-tab="caja" class="nav-btn-desk flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition-all">
-          <i class="fa-solid fa-receipt"></i><span>Ventas</span>
-        </button>
-        <button data-tab="devoluciones" class="nav-btn-desk flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition-all">
-          <i class="fa-solid fa-rotate-left"></i><span>Devoluciones</span>
-        </button>
+        <button data-tab="dashboard" class="nav-btn-desk flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-emerald-400 shadow-sm transition-all"><i class="fa-solid fa-chart-pie"></i><span>Inicio</span></button>
+        <button data-tab="inventario" class="nav-btn-desk flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition-all"><i class="fa-solid fa-shoe-prints"></i><span>Stock</span></button>
+        <button data-tab="caja" class="nav-btn-desk flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition-all"><i class="fa-solid fa-receipt"></i><span>Ventas</span></button>
+        <button data-tab="devoluciones" class="nav-btn-desk flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition-all"><i class="fa-solid fa-rotate-left"></i><span>Devoluciones</span></button>
       </nav>
       
       <div class="flex items-center space-x-2">
         <span id="user-email-display" class="hidden sm:inline text-[11px] text-slate-400 font-mono bg-slate-700/60 px-2 py-1 rounded-lg"></span>
-        <button id="logout-btn" title="Cerrar Sesión" class="p-2 text-slate-400 hover:text-red-400 rounded-lg hover:bg-slate-700 transition-colors">
-          <i class="fa-solid fa-right-from-bracket text-sm"></i>
-        </button>
+        <button id="logout-btn" title="Cerrar Sesión" class="p-2 text-slate-400 hover:text-red-400 rounded-lg hover:bg-slate-700 transition-colors"><i class="fa-solid fa-right-from-bracket text-sm"></i></button>
       </div>
     </header>
 
     <main class="max-w-4xl mx-auto px-4 pt-16 md:pt-4 w-full flex-grow">
 
-      <!-- SECCIÓN: DASHBOARD -->
+      <!-- DASHBOARD -->
       <section id="sec-dashboard" class="space-y-4 py-4">
         <div class="flex items-center justify-between">
           <div>
             <h2 class="text-xl font-bold text-white">Resumen Comercial</h2>
             <p class="text-xs text-slate-400">Control de ventas, stock y devoluciones en tiempo real</p>
           </div>
-          <!-- BOTÓN DE RESTABLECER / BORRAR BODEGA COMPLETA -->
-          <button id="reset-bodega-btn" class="bg-red-950/60 hover:bg-red-900 border border-red-800/80 text-red-300 hover:text-red-100 text-[11px] px-3 py-1.5 rounded-lg font-medium flex items-center space-x-1.5 transition-all shadow-sm">
-            <i class="fa-solid fa-trash-can"></i>
-            <span>Limpiar Bodega</span>
+          <!-- BOTÓN SOLO ADMIN -->
+          <button id="reset-bodega-btn" class="admin-only bg-red-950/60 hover:bg-red-900 border border-red-800/80 text-red-300 hover:text-red-100 text-[11px] px-3 py-1.5 rounded-lg font-medium flex items-center space-x-1.5 transition-all shadow-sm">
+            <i class="fa-solid fa-trash-can"></i><span>Limpiar Bodega</span>
           </button>
         </div>
 
         <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-sm">
-            <p class="text-xs font-medium text-slate-400 mb-1">Total Referencias</p>
-            <p id="dash-total-prods" class="text-2xl font-bold text-white">0</p>
-          </div>
-          <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-sm">
-            <p class="text-xs font-medium text-slate-400 mb-1">Pares en Stock</p>
-            <p id="dash-total-units" class="text-2xl font-bold text-white">0</p>
-          </div>
-          <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-sm">
-            <p class="text-xs font-medium text-slate-400 mb-1">Ventas Registradas</p>
-            <p id="dash-ventas-hoy" class="text-2xl font-bold text-emerald-400">$0</p>
-          </div>
-          <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-sm">
-            <p class="text-xs font-medium text-slate-400 mb-1">Devoluciones Pendientes</p>
-            <p id="dash-dev-pendientes" class="text-2xl font-bold text-amber-500">0</p>
-          </div>
+          <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-sm"><p class="text-xs font-medium text-slate-400 mb-1">Total Referencias</p><p id="dash-total-prods" class="text-2xl font-bold text-white">0</p></div>
+          <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-sm"><p class="text-xs font-medium text-slate-400 mb-1">Pares en Stock</p><p id="dash-total-units" class="text-2xl font-bold text-white">0</p></div>
+          <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-sm"><p class="text-xs font-medium text-slate-400 mb-1">Ventas Registradas</p><p id="dash-ventas-hoy" class="text-2xl font-bold text-emerald-400">$0</p></div>
+          <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-sm"><p class="text-xs font-medium text-slate-400 mb-1">Devoluciones Pendientes</p><p id="dash-dev-pendientes" class="text-2xl font-bold text-amber-500">0</p></div>
         </div>
 
         <div class="grid grid-cols-2 gap-3 pt-2">
-          <button data-tab="inventario" class="nav-trigger flex items-center justify-center space-x-2 bg-emerald-600 hover:bg-emerald-700 text-white p-3.5 rounded-xl font-semibold shadow-lg shadow-emerald-600/20 transition-all">
-            <i class="fa-solid fa-shoe-prints text-lg"></i><span class="text-sm">Ver / Agregar Stock</span>
-          </button>
-          <button data-tab="caja" class="nav-trigger flex items-center justify-center space-x-2 bg-slate-700 hover:bg-slate-600 text-white p-3.5 rounded-xl font-semibold shadow-md transition-all">
-            <i class="fa-solid fa-receipt text-sm"></i><span class="text-sm">Ver Ventas & Devolver</span>
-          </button>
+          <button data-tab="inventario" class="nav-trigger flex items-center justify-center space-x-2 bg-emerald-600 hover:bg-emerald-700 text-white p-3.5 rounded-xl font-semibold shadow-lg shadow-emerald-600/20 transition-all"><i class="fa-solid fa-shoe-prints text-lg"></i><span class="text-sm">Ver / Agregar Stock</span></button>
+          <button data-tab="caja" class="nav-trigger flex items-center justify-center space-x-2 bg-slate-700 hover:bg-slate-600 text-white p-3.5 rounded-xl font-semibold shadow-md transition-all"><i class="fa-solid fa-receipt text-sm"></i><span class="text-sm">Ver Ventas & Devolver</span></button>
         </div>
 
         <div class="bg-slate-800 rounded-xl border border-slate-700 p-4 shadow-sm space-y-3">
@@ -214,22 +257,20 @@
         </div>
       </section>
 
-      <!-- SECCIÓN: INVENTARIO -->
+      <!-- INVENTARIO -->
       <section id="sec-inventario" class="space-y-4 py-4 hidden">
         <div class="flex items-center justify-between">
           <div>
             <h2 class="text-xl font-bold text-white">Inventario de Zapatillas</h2>
-            <p class="text-xs text-slate-400">Administra códigos, modelos, curvas de tallas y ventas en directo</p>
+            <p class="text-xs text-slate-400">Administra códigos, modelos y curva de tallas</p>
           </div>
-          <button id="toggle-form-btn" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-2 rounded-lg font-medium flex items-center space-x-1">
-            <i class="fa-solid fa-plus"></i><span>Nueva Zapatilla</span>
-          </button>
+          <!-- BOTÓN SOLO ADMIN -->
+          <button id="toggle-form-btn" class="admin-only bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-2 rounded-lg font-medium flex items-center space-x-1"><i class="fa-solid fa-plus"></i><span>Nueva Zapatilla</span></button>
         </div>
 
-        <!-- Formulario de Registro -->
-        <div id="form-producto" class="hidden bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-md space-y-4">
+        <!-- FORMULARIO SOLO ADMIN -->
+        <div id="form-producto" class="hidden admin-only bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-md space-y-4">
           <h3 class="text-sm font-bold text-white border-b border-slate-700 pb-2">Registrar Modelo y Curva de Tallas</h3>
-          
           <form id="product-form" class="space-y-4">
             <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
               <div>
@@ -281,6 +322,8 @@
                   <th class="p-3">Código</th>
                   <th class="p-3">Modelo</th>
                   <th class="p-3">Talla</th>
+                  <!-- Ocultar columna costo para Vendedores -->
+                  <th class="p-3 text-right admin-only">Costo</th>
                   <th class="p-3 text-right">Precio Venta</th>
                   <th class="p-3 text-center">Stock</th>
                   <th class="p-3 text-center">Acciones</th>
@@ -292,19 +335,14 @@
         </div>
       </section>
 
-      <!-- SECCIÓN: VENTAS -->
+      <!-- VENTAS -->
       <section id="sec-caja" class="space-y-4 py-4 hidden">
         <div class="flex items-center justify-between">
           <div>
             <h2 class="text-xl font-bold text-white">Registro de Ventas</h2>
-            <p class="text-xs text-slate-400">Historial de ventas. Utiliza el botón "Devolver" si el cliente no regresó por el pedido</p>
+            <p class="text-xs text-slate-400">Historial de ventas y devoluciones</p>
           </div>
-          <div class="flex space-x-2">
-            <button id="export-pdf-btn" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-2 rounded-lg font-medium flex items-center space-x-1.5 shadow-md transition-all">
-              <i class="fa-solid fa-file-pdf"></i>
-              <span>Exportar Reporte PDF</span>
-            </button>
-          </div>
+          <button id="export-pdf-btn" class="admin-only bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-2 rounded-lg font-medium flex items-center space-x-1.5 shadow-md transition-all"><i class="fa-solid fa-file-pdf"></i><span>Exportar Reporte PDF</span></button>
         </div>
 
         <div class="bg-slate-800 rounded-xl border border-slate-700 shadow-sm overflow-hidden">
@@ -324,12 +362,12 @@
         </div>
       </section>
 
-      <!-- SECCIÓN: DEVOLUCIONES -->
+      <!-- DEVOLUCIONES -->
       <section id="sec-devoluciones" class="space-y-4 py-4 hidden">
         <div class="flex items-center justify-between">
           <div>
             <h2 class="text-xl font-bold text-white">Devoluciones & Reintegro</h2>
-            <p class="text-xs text-slate-400">Pares devueltos por clientes. Reintégralos al stock con un solo clic</p>
+            <p class="text-xs text-slate-400">Pares devueltos por clientes</p>
           </div>
         </div>
 
@@ -358,127 +396,203 @@
       <div class="max-w-4xl mx-auto flex flex-col md:flex-row items-center justify-between gap-3">
         <div class="flex items-center space-x-2">
           <span class="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-          <span class="font-medium text-slate-400">Vitrina v1.0 • Sistema de Bodega</span>
+          <span class="font-medium text-slate-400">Vitrina v1.1 • Sistema Multi-tienda</span>
         </div>
-        <div>
-          <span>Diseñado & Desarrollado por </span>
-          <strong class="text-emerald-400 font-bold">Juan David Lenis</strong>
-        </div>
+        <div><span>Diseñado & Desarrollado por </span><strong class="text-emerald-400 font-bold">Juan David Lenis</strong></div>
         <div class="flex items-center space-x-3">
-          <a href="https://wa.me/573181848375?text=Hola,%20requiero%20soporte%20sobre%20el%20sistema%20Vitrina" target="_blank" class="text-slate-400 hover:text-emerald-400 transition-colors flex items-center space-x-1">
-            <i class="fa-brands fa-whatsapp text-sm"></i><span>Contacto / Soporte</span>
-          </a>
+          <a href="https://wa.me/573181848375?text=Hola,%20requiero%20soporte%20sobre%20el%20sistema%20Vitrina" target="_blank" class="text-slate-400 hover:text-emerald-400 transition-colors flex items-center space-x-1"><i class="fa-brands fa-whatsapp text-sm"></i><span>Soporte</span></a>
         </div>
       </div>
     </footer>
 
     <!-- NAV MÓVIL -->
     <nav class="md:hidden fixed bottom-0 left-0 right-0 bg-slate-800 border-t border-slate-700 z-40 flex justify-around py-2 shadow-lg">
-      <button data-tab="dashboard" class="nav-btn-mob flex flex-col items-center text-emerald-400 px-3 py-1">
-        <i class="fa-solid fa-chart-pie text-base"></i><span class="text-[10px] font-medium mt-1">Inicio</span>
-      </button>
-      <button data-tab="inventario" class="nav-btn-mob flex flex-col items-center text-slate-500 hover:text-slate-300 px-3 py-1">
-        <i class="fa-solid fa-shoe-prints text-base"></i><span class="text-[10px] font-medium mt-1">Stock</span>
-      </button>
-      <button data-tab="caja" class="nav-btn-mob flex flex-col items-center text-slate-500 hover:text-slate-300 px-3 py-1">
-        <i class="fa-solid fa-receipt text-base"></i><span class="text-[10px] font-medium mt-1">Ventas</span>
-      </button>
-      <button data-tab="devoluciones" class="nav-btn-mob flex flex-col items-center text-slate-500 hover:text-slate-300 px-3 py-1">
-        <i class="fa-solid fa-rotate-left text-base"></i><span class="text-[10px] font-medium mt-1">Devolución</span>
-      </button>
+      <button data-tab="dashboard" class="nav-btn-mob flex flex-col items-center text-emerald-400 px-3 py-1"><i class="fa-solid fa-chart-pie text-base"></i><span class="text-[10px] font-medium mt-1">Inicio</span></button>
+      <button data-tab="inventario" class="nav-btn-mob flex flex-col items-center text-slate-500 hover:text-slate-300 px-3 py-1"><i class="fa-solid fa-shoe-prints text-base"></i><span class="text-[10px] font-medium mt-1">Stock</span></button>
+      <button data-tab="caja" class="nav-btn-mob flex flex-col items-center text-slate-500 hover:text-slate-300 px-3 py-1"><i class="fa-solid fa-receipt text-base"></i><span class="text-[10px] font-medium mt-1">Ventas</span></button>
+      <button data-tab="devoluciones" class="nav-btn-mob flex flex-col items-center text-slate-500 hover:text-slate-300 px-3 py-1"><i class="fa-solid fa-rotate-left text-base"></i><span class="text-[10px] font-medium mt-1">Devolución</span></button>
     </nav>
   </div>
 
-  <!-- LÓGICA DE APLICACIÓN -->
+  <!-- ========================================== -->
+  <!-- 3. LÓGICA DE APLICACIÓN                    -->
+  <!-- ========================================== -->
   <script type="module">
     import { 
       collection, 
       doc, 
       setDoc, 
+      getDoc,
       getDocs,
       deleteDoc, 
       onSnapshot 
     } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
     import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
-    let isRegisterMode = false;
-    let state = {
-      productos: [],
-      ventas: [],
-      devoluciones: []
-    };
+    let isRegisterAdminMode = false;
+    let state = { productos: [], ventas: [], devoluciones: [] };
     let unsubscribers = [];
 
+    // MODAL DE AVISOS Y PROMPTS
+    function mostrarModal({ title, message, type = 'info', showCancel = false, inputConfig = null, onConfirm }) {
+      const modal = document.getElementById('vitrina-modal');
+      const titleEl = document.getElementById('vmodal-title');
+      const msgEl = document.getElementById('vmodal-message');
+      const iconContainer = document.getElementById('vmodal-icon-container');
+      const iconEl = document.getElementById('vmodal-icon');
+      const btnCancel = document.getElementById('vmodal-btn-cancel');
+      const btnOk = document.getElementById('vmodal-btn-ok');
+      const inputBox = document.getElementById('vmodal-input-box');
+      const inputLabel = document.getElementById('vmodal-input-label');
+      const inputField = document.getElementById('vmodal-input-field');
+
+      titleEl.textContent = title;
+      msgEl.textContent = message;
+
+      if (type === 'danger') {
+        iconContainer.className = "w-12 h-12 rounded-2xl flex items-center justify-center text-xl mx-auto border bg-red-950/80 text-red-400 border-red-800/50 shadow-md";
+        iconEl.className = "fa-solid fa-triangle-exclamation";
+        btnOk.className = "col-span-1 bg-red-600 hover:bg-red-700 text-white font-bold py-2.5 rounded-xl text-xs shadow-lg transition-colors";
+      } else if (type === 'warning') {
+        iconContainer.className = "w-12 h-12 rounded-2xl flex items-center justify-center text-xl mx-auto border bg-amber-950/80 text-amber-400 border-amber-800/50 shadow-md";
+        iconEl.className = "fa-solid fa-triangle-exclamation";
+        btnOk.className = "col-span-1 bg-amber-600 hover:bg-amber-700 text-white font-bold py-2.5 rounded-xl text-xs shadow-lg transition-colors";
+      } else {
+        iconContainer.className = "w-12 h-12 rounded-2xl flex items-center justify-center text-xl mx-auto border bg-emerald-950/80 text-emerald-400 border-emerald-800/50 shadow-md";
+        iconEl.className = "fa-solid fa-circle-check";
+        btnOk.className = "col-span-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-xl text-xs shadow-lg shadow-emerald-600/20 transition-colors";
+      }
+
+      if (showCancel) {
+        btnCancel.classList.remove('hidden');
+        btnOk.classList.remove('col-span-2');
+        btnOk.classList.add('col-span-1');
+      } else {
+        btnCancel.classList.add('hidden');
+        btnOk.classList.remove('col-span-1');
+        btnOk.classList.add('col-span-2');
+      }
+
+      if (inputConfig) {
+        inputBox.classList.remove('hidden');
+        inputLabel.textContent = inputConfig.label || '';
+        inputField.type = inputConfig.type || 'text';
+        inputField.value = inputConfig.value || '';
+        setTimeout(() => inputField.focus(), 100);
+      } else {
+        inputBox.classList.add('hidden');
+      }
+
+      modal.classList.remove('hidden');
+
+      const limpiarEventos = () => {
+        btnOk.replaceWith(btnOk.cloneNode(true));
+        btnCancel.replaceWith(btnCancel.cloneNode(true));
+      };
+
+      document.getElementById('vmodal-btn-ok').onclick = () => {
+        const val = inputConfig ? inputField.value : true;
+        modal.classList.add('hidden');
+        limpiarEventos();
+        if (onConfirm) onConfirm(val);
+      };
+
+      document.getElementById('vmodal-btn-cancel').onclick = () => {
+        modal.classList.add('hidden');
+        limpiarEventos();
+      };
+    }
+
+    // AUTENTICACIÓN MULTI-TIENDA
     const authForm = document.getElementById('auth-form');
     const authToggleBtn = document.getElementById('auth-toggle-btn');
     const logoutBtn = document.getElementById('logout-btn');
 
     authToggleBtn.addEventListener('click', () => {
-      isRegisterMode = !isRegisterMode;
+      isRegisterAdminMode = !isRegisterAdminMode;
       const title = document.getElementById('auth-title');
       const subtitle = document.getElementById('auth-subtitle');
       const btn = document.getElementById('auth-btn-submit');
       const toggleText = document.getElementById('auth-toggle-text');
+      const extraFields = document.getElementById('auth-extra-fields');
 
-      if (isRegisterMode) {
-        title.textContent = "Crear Cuenta en Vitrina";
-        subtitle.textContent = "Crea tu usuario para sincronizar tu bodega entre tu PC y celular";
-        btn.innerHTML = `<span>Registrar mi Cuenta</span><i class="fa-solid fa-user-plus text-xs"></i>`;
-        toggleText.innerHTML = `¿Ya tienes cuenta activa? <button type="button" id="auth-toggle-btn" class="text-emerald-400 hover:underline font-bold ml-1">Inicia sesión aquí</button>`;
+      if (isRegisterAdminMode) {
+        title.textContent = "Crear Cuenta de Tienda";
+        subtitle.textContent = "Crea la cuenta principal de tu negocio en Vitrina";
+        btn.innerHTML = `<span>Registrar Tienda Principal</span><i class="fa-solid fa-store text-xs"></i>`;
+        toggleText.innerHTML = `¿Ya tienes cuenta de usuario o vendedor? <button type="button" id="auth-toggle-btn" class="text-emerald-400 hover:underline font-bold ml-1">Inicia sesión aquí</button>`;
+        extraFields.classList.remove('hidden');
       } else {
-        title.textContent = "Iniciar Sesión en Vitrina";
-        subtitle.textContent = "Ingresa tus credenciales para acceder a tu bodega sincronizada";
+        title.textContent = "Ingreso a Vitrina";
+        subtitle.textContent = "Ingresa tus credenciales y accede a tu bodega";
         btn.innerHTML = `<span>Ingresar a la Bodega</span><i class="fa-solid fa-arrow-right text-xs"></i>`;
-        toggleText.innerHTML = `¿No tienes una cuenta aún? <button type="button" id="auth-toggle-btn" class="text-emerald-400 hover:underline font-bold ml-1">Regístrate aquí</button>`;
+        toggleText.innerHTML = `¿Registrar nueva tienda principal? <button type="button" id="auth-toggle-btn" class="text-emerald-400 hover:underline font-bold ml-1">Crear Cuenta Admin</button>`;
+        extraFields.classList.add('hidden');
       }
       document.getElementById('auth-toggle-btn').addEventListener('click', authToggleBtn.onclick);
     });
 
     authForm.addEventListener('submit', async (e) => {
       e.preventDefault();
+      const username = document.getElementById('auth-username').value.trim();
       const email = document.getElementById('auth-email').value.trim();
       const pass = document.getElementById('auth-password').value.trim();
+      const db = window.appDb;
+
       if (!window.isFirebaseActive) return;
 
       try {
-        if (isRegisterMode) {
-          await createUserWithEmailAndPassword(window.appAuth, email, pass);
-          alert("¡Cuenta creada con éxito! Bienvenido a Vitrina.");
+        if (isRegisterAdminMode) {
+          const tiendaId = document.getElementById('auth-tienda-id').value.trim().toLowerCase();
+          const rol = document.getElementById('auth-rol').value;
+
+          if (!tiendaId) {
+            mostrarModal({ title: "Campo Requerido", message: "Ingresa el ID de Vitrina para tu tienda.", type: "warning" });
+            return;
+          }
+
+          const userCred = await createUserWithEmailAndPassword(window.appAuth, email, pass);
+          await setDoc(doc(db, "usuarios_meta", userCred.user.uid), {
+            uid: userCred.user.uid,
+            nombreUsuario: username,
+            email,
+            tiendaId,
+            rol
+          });
+
+          mostrarModal({ title: "¡Éxito!", message: `Tienda ${tiendaId.toUpperCase()} creada correctamente en Vitrina.`, type: "success" });
         } else {
           await signInWithEmailAndPassword(window.appAuth, email, pass);
         }
       } catch (error) {
-        alert("Error de acceso: " + (error.message || "Credenciales incorrectas"));
+        mostrarModal({ title: "Error de Acceso", message: error.message || "Credenciales incorrectas.", type: "danger" });
       }
     });
 
     logoutBtn.addEventListener('click', async () => {
-      if (window.isFirebaseActive) {
-        await signOut(window.appAuth);
-      }
+      if (window.isFirebaseActive) await signOut(window.appAuth);
       unsubscribers.forEach(unsub => unsub());
       unsubscribers = [];
       location.reload();
     });
 
-    window.iniciarSincronizacionCloud = function(uid) {
+    // SINCRONIZACIÓN CLOUD POR TIENDA (MULTI-TENANT)
+    window.iniciarSincronizacionCloud = function(tiendaId) {
       const db = window.appDb;
       if (!db) return;
 
       unsubscribers.forEach(unsub => unsub());
       unsubscribers = [];
 
-      const unsubProds = onSnapshot(collection(db, `usuarios/${uid}/productos`), (snapshot) => {
+      const unsubProds = onSnapshot(collection(db, `tiendas/${tiendaId}/productos`), (snapshot) => {
         state.productos = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
         actualizarInterfaz();
       });
-
-      const unsubVentas = onSnapshot(collection(db, `usuarios/${uid}/ventas`), (snapshot) => {
+      const unsubVentas = onSnapshot(collection(db, `tiendas/${tiendaId}/ventas`), (snapshot) => {
         state.ventas = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
         actualizarInterfaz();
       });
-
-      const unsubDevs = onSnapshot(collection(db, `usuarios/${uid}/devoluciones`), (snapshot) => {
+      const unsubDevs = onSnapshot(collection(db, `tiendas/${tiendaId}/devoluciones`), (snapshot) => {
         state.devoluciones = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
         actualizarInterfaz();
       });
@@ -486,25 +600,20 @@
       unsubscribers.push(unsubProds, unsubVentas, unsubDevs);
     };
 
+    // CONTROL DE NAVEGACIÓN
     function cambiarPestaña(tabId) {
       ['dashboard', 'inventario', 'caja', 'devoluciones'].forEach(id => {
-        const section = document.getElementById(`sec-${id}`);
-        if (section) section.classList.add('hidden');
+        document.getElementById(`sec-${id}`).classList.add('hidden');
       });
-
-      const targetSection = document.getElementById(`sec-${tabId}`);
-      if (targetSection) targetSection.classList.remove('hidden');
+      document.getElementById(`sec-${tabId}`).classList.remove('hidden');
 
       document.querySelectorAll('.nav-btn-mob').forEach(btn => {
         if (btn.dataset.tab === tabId) {
-          btn.classList.remove('text-slate-500', 'hover:text-slate-300');
-          btn.classList.add('text-emerald-400');
+          btn.className = "nav-btn-mob flex flex-col items-center text-emerald-400 px-3 py-1";
         } else {
-          btn.classList.remove('text-emerald-400');
-          btn.classList.add('text-slate-500', 'hover:text-slate-300');
+          btn.className = "nav-btn-mob flex flex-col items-center text-slate-500 hover:text-slate-300 px-3 py-1";
         }
       });
-
       document.querySelectorAll('.nav-btn-desk').forEach(btn => {
         if (btn.dataset.tab === tabId) {
           btn.className = "nav-btn-desk flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-emerald-400 shadow-sm transition-all";
@@ -514,10 +623,9 @@
       });
     }
 
-    document.querySelectorAll('[data-tab]').forEach(element => {
-      element.addEventListener('click', () => cambiarPestaña(element.dataset.tab));
-    });
+    document.querySelectorAll('[data-tab]').forEach(el => el.addEventListener('click', () => cambiarPestaña(el.dataset.tab)));
 
+    // GESTIÓN DE INVENTARIO (ADMIN ONLY)
     const tipoTallaSelect = document.getElementById('prod-tipo-talla');
     const contenedorTallas = document.getElementById('contenedor-tallas');
     const formProducto = document.getElementById('form-producto');
@@ -525,7 +633,6 @@
     function generarCamposTallas() {
       const tipo = tipoTallaSelect.value;
       contenedorTallas.innerHTML = '';
-
       if (tipo === 'dama') {
         ['36', '37', '38', '39'].forEach(t => renderInputTalla(t));
       } else if (tipo === 'caballero') {
@@ -533,16 +640,9 @@
       } else {
         contenedorTallas.innerHTML = `
           <div class="col-span-full grid grid-cols-2 gap-2">
-            <div>
-              <label class="block font-semibold text-slate-300 mb-1">Número de Talla Especial</label>
-              <input type="text" id="custom-talla-num" placeholder="Ej: 35.5 / 45" class="w-full p-2 bg-slate-700 text-white border border-slate-600 rounded">
-            </div>
-            <div>
-              <label class="block font-semibold text-slate-300 mb-1">Pares Disponibles</label>
-              <input type="number" id="custom-talla-qty" min="1" placeholder="0" class="w-full p-2 bg-slate-700 text-white border border-slate-600 rounded font-bold">
-            </div>
-          </div>
-        `;
+            <div><label class="block font-semibold text-slate-300 mb-1">Talla Especial</label><input type="text" id="custom-talla-num" placeholder="Ej: 35.5" class="w-full p-2 bg-slate-700 text-white border border-slate-600 rounded"></div>
+            <div><label class="block font-semibold text-slate-300 mb-1">Pares</label><input type="number" id="custom-talla-qty" min="1" placeholder="0" class="w-full p-2 bg-slate-700 text-white border border-slate-600 rounded font-bold"></div>
+          </div>`;
       }
     }
 
@@ -551,8 +651,7 @@
         <div class="bg-slate-800 p-2 rounded-lg border border-slate-700 text-center">
           <label class="block font-bold text-slate-300 mb-1">Talla ${talla}</label>
           <input type="number" min="0" data-talla="${talla}" placeholder="0" class="input-talla-stock w-full p-1 bg-slate-700 text-white text-center border border-slate-600 rounded font-bold focus:border-emerald-500 focus:outline-none">
-        </div>
-      `;
+        </div>`;
     }
 
     tipoTallaSelect.addEventListener('change', generarCamposTallas);
@@ -568,61 +667,47 @@
       const precio = parseFloat(document.getElementById('prod-precio').value) || 0;
 
       if (codigo.length !== 4) {
-        alert('El código debe tener exactamente 4 dígitos.');
+        mostrarModal({ title: "Código Inválido", message: "El código debe tener 4 dígitos.", type: "warning" });
         return;
       }
 
       const db = window.appDb;
-      const uid = window.currentUser.uid;
+      const tiendaId = window.userData.tiendaId;
       let agregados = 0;
 
       try {
         if (tipo === 'custom') {
           const customTalla = document.getElementById('custom-talla-num').value.trim();
           const customQty = parseInt(document.getElementById('custom-talla-qty').value) || 0;
-
-          if (!customTalla || customQty <= 0) {
-            alert('Ingresa la talla especial y la cantidad de pares.');
-            return;
-          }
-
+          if (!customTalla || customQty <= 0) return;
           const id = `prod_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
-          const nuevoProd = { id, codigo, nombre, talla: `Talla ${customTalla}`, costo, precio, stock: customQty };
-          await setDoc(doc(db, `usuarios/${uid}/productos`, id), nuevoProd);
+          await setDoc(doc(db, `tiendas/${tiendaId}/productos`, id), { id, codigo, nombre, talla: `Talla ${customTalla}`, costo, precio, stock: customQty });
           agregados++;
         } else {
           const inputsTallas = document.querySelectorAll('.input-talla-stock');
           for (let i = 0; i < inputsTallas.length; i++) {
             const stock = parseInt(inputsTallas[i].value) || 0;
             const talla = inputsTallas[i].dataset.talla;
-
             if (stock > 0) {
               const existe = state.productos.find(p => p.codigo === codigo && p.talla === `Talla ${talla}`);
               const id = existe ? existe.id : `prod_${Date.now()}_${i}_${Math.floor(Math.random() * 1000)}`;
               const stockFinal = existe ? Number(existe.stock) + stock : stock;
-
-              const prodData = { id, codigo, nombre, talla: `Talla ${talla}`, costo, precio, stock: stockFinal };
-              await setDoc(doc(db, `usuarios/${uid}/productos`, id), prodData);
+              await setDoc(doc(db, `tiendas/${tiendaId}/productos`, id), { id, codigo, nombre, talla: `Talla ${talla}`, costo, precio, stock: stockFinal });
               agregados++;
             }
           }
         }
 
-        if (agregados === 0) {
-          alert('Ingresa al menos un par disponible en alguna talla.');
-          return;
-        }
-
         e.target.reset();
         generarCamposTallas();
         formProducto.classList.add('hidden');
-        alert(`¡Éxito! Referencia ${nombre} registrada correctamente.`);
+        mostrarModal({ title: "¡Éxito!", message: `Referencia ${nombre} guardada en bodega.`, type: "success" });
       } catch (error) {
-        console.error("Error al guardar producto:", error);
-        alert("Hubo un error al registrar el producto en la nube.");
+        mostrarModal({ title: "Error", message: "No se pudo registrar el producto.", type: "danger" });
       }
     });
 
+    // RENDERIZADO INTERFAZ
     function actualizarInterfaz() {
       renderDashboard();
       renderInventario();
@@ -641,34 +726,6 @@
       document.getElementById('dash-total-units').textContent = totalUnits;
       document.getElementById('dash-ventas-hoy').textContent = `$${ventasTotal.toLocaleString('es-CO')}`;
       document.getElementById('dash-dev-pendientes').textContent = devsPendientes;
-
-      const alertTitle = document.getElementById('dash-alert-title');
-      const alertList = document.getElementById('dash-alert-list');
-
-      if (totalProds === 0) {
-        alertTitle.className = "text-sm font-bold text-slate-300 flex items-center space-x-2";
-        alertTitle.innerHTML = `<i class="fa-solid fa-boxes-stacked text-slate-400"></i><span>Inventario Vacío</span>`;
-        alertList.innerHTML = `<p class="text-slate-400 font-normal">Aún no has ingresado zapatillas al stock. Haz clic en "Ver / Agregar Stock" para registrar tu primera referencia.</p>`;
-      } else if (lowStock.length === 0) {
-        alertTitle.className = "text-sm font-bold text-emerald-400 flex items-center space-x-2";
-        alertTitle.innerHTML = `<i class="fa-solid fa-circle-check"></i><span>Inventario en Buen Estado</span>`;
-        alertList.innerHTML = `<p class="text-slate-400 font-normal">Todas las referencias cuentan con suficiente disponibilidad 👍</p>`;
-      } else {
-        alertTitle.className = "text-sm font-bold text-amber-400 flex items-center space-x-2";
-        alertTitle.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-amber-500"></i><span>⚠️ Alerta: Inventario Bajo / Agotado</span>`;
-        alertList.innerHTML = lowStock.map(p => `
-          <div class="flex justify-between items-center bg-amber-950/30 p-2.5 rounded-lg border border-amber-800/40">
-            <div>
-              <span class="font-bold font-mono text-xs bg-slate-700 text-slate-200 px-1.5 py-0.5 rounded mr-1">#${p.codigo}</span>
-              <span class="font-semibold text-slate-200">${p.nombre}</span>
-              <span class="text-slate-400 font-normal">(${p.talla})</span>
-            </div>
-            <span class="font-bold ${p.stock === 0 ? 'text-red-400 bg-red-950/50 px-2 py-0.5 rounded' : 'text-amber-400'}">
-              ${p.stock === 0 ? '¡Agotado!' : `${p.stock} pares restantes`}
-            </span>
-          </div>
-        `).join('');
-      }
     }
 
     const searchInventoryInput = document.getElementById('search-inventory');
@@ -677,15 +734,12 @@
     function renderInventario() {
       const search = searchInventoryInput.value.toLowerCase().trim();
       const tbody = document.getElementById('inventory-table-body');
-      
-      const filtered = state.productos.filter(p => 
-        (p.codigo && p.codigo.toLowerCase().includes(search)) ||
-        p.nombre.toLowerCase().includes(search) || 
-        p.talla.toLowerCase().includes(search)
-      );
+      const isAdmin = window.userData && window.userData.rol === 'admin';
+
+      const filtered = state.productos.filter(p => (p.codigo && p.codigo.toLowerCase().includes(search)) || p.nombre.toLowerCase().includes(search) || p.talla.toLowerCase().includes(search));
 
       if (filtered.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-slate-500 font-medium">No se encontraron zapatillas con ese criterio.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="${isAdmin ? 7 : 6}" class="p-4 text-center text-slate-500 font-medium">No se encontraron referencias.</td></tr>`;
         return;
       }
 
@@ -694,59 +748,71 @@
           <td class="p-3 font-mono font-bold text-emerald-400">#${p.codigo}</td>
           <td class="p-3 font-semibold text-slate-100">${p.nombre}</td>
           <td class="p-3"><span class="bg-slate-700 text-slate-300 px-2 py-0.5 rounded text-[10px] font-medium">${p.talla}</span></td>
+          ${isAdmin ? `<td class="p-3 text-right text-slate-400 font-mono">$${Number(p.costo || 0).toLocaleString('es-CO')}</td>` : ''}
           <td class="p-3 text-right font-medium">$${Number(p.precio).toLocaleString('es-CO')}</td>
-          <td class="p-3 text-center">
-            <span class="font-bold ${p.stock === 0 ? 'text-red-400 bg-red-950/40 px-2 py-0.5 rounded' : p.stock <= 2 ? 'text-amber-400 bg-amber-950/40 px-2 py-0.5 rounded' : 'text-slate-300'}">${p.stock}</span>
-          </td>
+          <td class="p-3 text-center"><span class="font-bold ${p.stock === 0 ? 'text-red-400 bg-red-950/40 px-2 py-0.5 rounded' : p.stock <= 2 ? 'text-amber-400 bg-amber-950/40 px-2 py-0.5 rounded' : 'text-slate-300'}">${p.stock}</span></td>
           <td class="p-3 text-center space-x-1">
-            <button onclick="window.venderProducto('${p.id}')" class="bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-1 rounded text-[11px] font-medium transition-colors">
-              <i class="fa-solid fa-cart-shopping mr-1"></i>Vender
-            </button>
-            <button onclick="window.eliminarProducto('${p.id}')" class="text-slate-400 hover:text-red-400 p-1"><i class="fa-regular fa-trash-can"></i></button>
+            <button onclick="window.venderProducto('${p.id}')" class="bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-1 rounded text-[11px] font-medium transition-colors"><i class="fa-solid fa-cart-shopping mr-1"></i>Vender</button>
+            ${isAdmin ? `<button onclick="window.eliminarProducto('${p.id}')" class="text-slate-400 hover:text-red-400 p-1"><i class="fa-regular fa-trash-can"></i></button>` : ''}
           </td>
-        </tr>
-      `).join('');
+        </tr>`).join('');
     }
 
-    window.venderProducto = async function(id) {
+    // VENTA FLEXIBLE CON PRECIO Y OBSERVACIONES
+    window.venderProducto = function(id) {
       const prod = state.productos.find(p => p.id === id);
       if (!prod || prod.stock <= 0) {
-        alert('Este producto no tiene stock disponible.');
+        mostrarModal({ title: "Sin Stock", message: "Producto no disponible.", type: "warning" });
         return;
       }
 
-      const cantStr = prompt(`Venta de: #${prod.codigo} - ${prod.nombre} (${prod.talla})\nDisponibles: ${prod.stock}\n\n¿Cuántos pares vas a vender?`, "1");
-      if (!cantStr) return;
+      mostrarModal({
+        title: "Registrar Venta",
+        message: `Modelo: #${prod.codigo} - ${prod.nombre} (${prod.talla})\nDisponibles: ${prod.stock} pares`,
+        type: "success",
+        showCancel: true,
+        inputConfig: { label: "Cantidad a vender:", type: "number", value: "1" },
+        onConfirm: (cantStr) => {
+          const cantidad = parseInt(cantStr);
+          if (isNaN(cantidad) || cantidad <= 0 || cantidad > prod.stock) return;
 
-      const cantidad = parseInt(cantStr);
-      if (isNaN(cantidad) || cantidad <= 0 || cantidad > prod.stock) {
-        alert('Cantidad inválida o superior al stock actual.');
-        return;
-      }
+          mostrarModal({
+            title: "Ajustar Precio de Venta",
+            message: `Precio base sugerido: $${Number(prod.precio * cantidad).toLocaleString('es-CO')}`,
+            type: "info",
+            showCancel: true,
+            inputConfig: { label: "Precio Final a Cobrar ($):", type: "number", value: (prod.precio * cantidad).toString() },
+            onConfirm: async (precioStr) => {
+              const totalVenta = parseFloat(precioStr);
+              if (isNaN(totalVenta) || totalVenta < 0) return;
 
-      const db = window.appDb;
-      const uid = window.currentUser.uid;
+              const db = window.appDb;
+              const tiendaId = window.userData.tiendaId;
 
-      prod.stock -= cantidad;
-      await setDoc(doc(db, `usuarios/${uid}/productos`, prod.id), prod);
+              prod.stock -= cantidad;
+              await setDoc(doc(db, `tiendas/${tiendaId}/productos`, prod.id), prod);
 
-      const totalVenta = prod.precio * cantidad;
-      const saleId = `sale_${Date.now()}`;
-      const nuevaVenta = {
-        id: saleId,
-        productoId: prod.id,
-        codigo: prod.codigo,
-        nombre: prod.nombre,
-        talla: prod.talla,
-        cantidad,
-        precioUnitario: prod.precio,
-        fecha: new Date().toLocaleString(),
-        concepto: `[#${prod.codigo}] ${prod.nombre} (${prod.talla}) x${cantidad}`,
-        total: totalVenta
-      };
+              const saleId = `sale_${Date.now()}`;
+              const nuevaVenta = {
+                id: saleId,
+                productoId: prod.id,
+                codigo: prod.codigo,
+                nombre: prod.nombre,
+                talla: prod.talla,
+                cantidad,
+                precioUnitario: totalVenta / cantidad,
+                vendedor: window.userData.nombreUsuario,
+                fecha: new Date().toLocaleString(),
+                concepto: `[#${prod.codigo}] ${prod.nombre} (${prod.talla}) x${cantidad}`,
+                total: totalVenta
+              };
 
-      await setDoc(doc(db, `usuarios/${uid}/ventas`, saleId), nuevaVenta);
-      alert(`✅ Venta registrada con éxito por $${totalVenta.toLocaleString('es-CO')}`);
+              await setDoc(doc(db, `tiendas/${tiendaId}/ventas`, saleId), nuevaVenta);
+              mostrarModal({ title: "¡Venta Registrada!", message: `Cobro realizado por $${totalVenta.toLocaleString('es-CO')}.`, type: "success" });
+            }
+          });
+        }
+      });
     };
 
     function renderVentas() {
@@ -755,48 +821,48 @@
         tbody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-slate-500 font-medium">No hay ventas registradas.</td></tr>`;
         return;
       }
-
       tbody.innerHTML = state.ventas.map(v => `
         <tr class="hover:bg-slate-700/40">
           <td class="p-3 text-slate-500 font-mono text-[11px]">${v.fecha}</td>
-          <td class="p-3 font-medium text-slate-200">${v.concepto}</td>
+          <td class="p-3 font-medium text-slate-200">${v.concepto} <span class="text-[10px] text-emerald-400 font-normal">(${v.vendedor || 'Vendedor'})</span></td>
           <td class="p-3 text-right font-bold text-emerald-400">$${Number(v.total).toLocaleString('es-CO')}</td>
-          <td class="p-3 text-center">
-            <button onclick="window.procesarDevolucion('${v.id}')" class="bg-amber-600/80 hover:bg-amber-600 text-white px-2 py-1 rounded text-[11px] font-medium transition-colors">
-              <i class="fa-solid fa-rotate-left mr-1"></i>Devolver
-            </button>
-          </td>
-        </tr>
-      `).join('');
+          <td class="p-3 text-center"><button onclick="window.procesarDevolucion('${v.id}')" class="bg-amber-600/80 hover:bg-amber-600 text-white px-2 py-1 rounded text-[11px] font-medium transition-colors"><i class="fa-solid fa-rotate-left mr-1"></i>Devolver</button></td>
+        </tr>`).join('');
     }
 
-    window.procesarDevolucion = async function(saleId) {
+    // DEVOLUCIONES
+    window.procesarDevolucion = function(saleId) {
       const venta = state.ventas.find(v => v.id === saleId);
       if (!venta) return;
 
-      const motivo = prompt(`Motivo de la devolución para ${venta.concepto}:`, "Cliente no regresó por el pedido");
-      if (motivo === null) return;
+      mostrarModal({
+        title: "Procesar Devolución",
+        message: `Devolución para: ${venta.concepto}`,
+        type: "warning",
+        showCancel: true,
+        inputConfig: { label: "Motivo:", type: "text", value: "Cliente no regresó por el pedido" },
+        onConfirm: async (motivo) => {
+          const db = window.appDb;
+          const tiendaId = window.userData.tiendaId;
+          const devId = `dev_${Date.now()}`;
 
-      const db = window.appDb;
-      const uid = window.currentUser.uid;
-      const devId = `dev_${Date.now()}`;
+          await setDoc(doc(db, `tiendas/${tiendaId}/devoluciones`, devId), {
+            id: devId,
+            codigo: venta.codigo,
+            nombre: venta.nombre,
+            talla: venta.talla,
+            cantidad: venta.cantidad,
+            precioUnitario: venta.precioUnitario,
+            total: venta.total,
+            motivo: motivo || "Sin especificar",
+            fechaDevolucion: new Date().toLocaleString(),
+            reintegrado: false
+          });
 
-      const nuevaDev = {
-        id: devId,
-        codigo: venta.codigo,
-        nombre: venta.nombre,
-        talla: venta.talla,
-        cantidad: venta.cantidad,
-        precioUnitario: venta.precioUnitario,
-        total: venta.total,
-        motivo: motivo || "Sin especificar",
-        fechaDevolucion: new Date().toLocaleString(),
-        reintegrado: false
-      };
-
-      await setDoc(doc(db, `usuarios/${uid}/devoluciones`, devId), nuevaDev);
-      await deleteDoc(doc(db, `usuarios/${uid}/ventas`, venta.id));
-      alert(`↩️ Devolución registrada. Ve a la pestaña "Devoluciones" para reintegrarla al stock.`);
+          await deleteDoc(doc(db, `tiendas/${tiendaId}/ventas`, venta.id));
+          mostrarModal({ title: "Devolución Registrada", message: "Puedes reintegrarla en la pestaña 'Devoluciones'.", type: "success" });
+        }
+      });
     };
 
     function renderDevoluciones() {
@@ -805,164 +871,72 @@
         tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-slate-500 font-medium">No hay devoluciones registradas.</td></tr>`;
         return;
       }
-
       tbody.innerHTML = state.devoluciones.map(d => `
         <tr class="hover:bg-slate-700/40">
           <td class="p-3 text-slate-500 font-mono text-[11px]">${d.fechaDevolucion}</td>
           <td class="p-3 font-medium text-slate-200">[#${d.codigo}] ${d.nombre} (${d.talla}) - x${d.cantidad}</td>
           <td class="p-3 text-slate-400 italic">${d.motivo}</td>
-          <td class="p-3 text-center">
-            ${d.reintegrado ? `<span class="bg-emerald-950/65 text-emerald-400 px-2 py-0.5 rounded text-[10px] font-bold">✅ Reintegrado</span>` : `<span class="bg-amber-950/65 text-amber-400 px-2 py-0.5 rounded text-[10px] font-bold">⏳ Pendiente</span>`}
-          </td>
-          <td class="p-3 text-center">
-            ${!d.reintegrado ? `<button onclick="window.reintegrarAlStock('${d.id}')" class="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 rounded text-[11px] font-bold transition-colors"><i class="fa-solid fa-box-archive mr-1"></i>Reintegrar</button>` : `<span class="text-slate-500 text-[11px]">Completado</span>`}
-          </td>
-        </tr>
-      `).join('');
+          <td class="p-3 text-center">${d.reintegrado ? `<span class="bg-emerald-950/65 text-emerald-400 px-2 py-0.5 rounded text-[10px] font-bold">✅ Reintegrado</span>` : `<span class="bg-amber-950/65 text-amber-400 px-2 py-0.5 rounded text-[10px] font-bold">⏳ Pendiente</span>`}</td>
+          <td class="p-3 text-center">${!d.reintegrado ? `<button onclick="window.reintegrarAlStock('${d.id}')" class="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 rounded text-[11px] font-bold transition-colors"><i class="fa-solid fa-box-archive mr-1"></i>Reintegrar</button>` : `<span class="text-slate-500 text-[11px]">Completado</span>`}</td>
+        </tr>`).join('');
     }
 
     window.reintegrarAlStock = async function(devId) {
       const dev = state.devoluciones.find(d => d.id === devId);
       if (!dev) return;
-
       const db = window.appDb;
-      const uid = window.currentUser.uid;
+      const tiendaId = window.userData.tiendaId;
       let prod = state.productos.find(p => p.codigo === dev.codigo && p.talla === dev.talla);
 
       if (prod) {
         prod.stock += dev.cantidad;
-        await setDoc(doc(db, `usuarios/${uid}/productos`, prod.id), prod);
+        await setDoc(doc(db, `tiendas/${tiendaId}/productos`, prod.id), prod);
       } else {
         const id = `prod_${Date.now()}`;
-        const nuevoProd = {
-          id,
-          codigo: dev.codigo,
-          nombre: dev.nombre,
-          talla: dev.talla,
-          costo: 0,
-          precio: dev.precioUnitario,
-          stock: dev.cantidad
-        };
-        await setDoc(doc(db, `usuarios/${uid}/productos`, id), nuevoProd);
+        await setDoc(doc(db, `tiendas/${tiendaId}/productos`, id), { id, codigo: dev.codigo, nombre: dev.nombre, talla: dev.talla, costo: 0, precio: dev.precioUnitario, stock: dev.cantidad });
       }
 
       dev.reintegrado = true;
-      await setDoc(doc(db, `usuarios/${uid}/devoluciones`, dev.id), dev);
-      alert(`📦 Stock reintegrado exitosamente.`);
+      await setDoc(doc(db, `tiendas/${tiendaId}/devoluciones`, dev.id), dev);
+      mostrarModal({ title: "Reintegrado", message: "Producto devuelto al stock.", type: "success" });
     };
 
-    window.eliminarProducto = async function(id) {
-      if (confirm('¿Estás seguro de eliminar este producto del inventario?')) {
-        const db = window.appDb;
-        const uid = window.currentUser.uid;
-        await deleteDoc(doc(db, `usuarios/${uid}/productos`, id));
-      }
-    };
-
-    // --- FUNCIÓN DE LIMPIEZA COMPLETA DE BODEGA ---
-    document.getElementById('reset-bodega-btn').addEventListener('click', async () => {
-      const primeraConfirmacion = confirm('⚠️ ¿Estás seguro de que deseas BORRAR TODOS los datos de tu bodega?\n\nEsta acción eliminará permanentemente:\n- Todo el inventario de zapatillas\n- Todas las ventas registradas\n- Todas las devoluciones');
-      
-      if (!primeraConfirmacion) return;
-
-      const segundaConfirmacion = confirm('🚨 ÚLTIMA ADVERTENCIA:\n\nEsta acción no se puede deshacer. Se restablecerá tu cuenta a cero. ¿Deseas continuar?');
-      if (!segundaConfirmacion) return;
-
-      const db = window.appDb;
-      const uid = window.currentUser.uid;
-      const subcolecciones = ['productos', 'ventas', 'devoluciones'];
-
-      try {
-        for (const subcol of subcolecciones) {
-          const snapshot = await getDocs(collection(db, `usuarios/${uid}/${subcol}`));
-          const promesasEliminar = snapshot.docs.map(documento => deleteDoc(doc(db, `usuarios/${uid}/${subcol}`, documento.id)));
-          await Promise.all(promesasEliminar);
+    window.eliminarProducto = function(id) {
+      mostrarModal({
+        title: "Eliminar Referencia",
+        message: "¿Deseas retirar este producto del inventario?",
+        type: "danger",
+        showCancel: true,
+        onConfirm: async () => {
+          const db = window.appDb;
+          const tiendaId = window.userData.tiendaId;
+          await deleteDoc(doc(db, `tiendas/${tiendaId}/productos`, id));
+          mostrarModal({ title: "Eliminado", message: "Producto retirado correctamente.", type: "success" });
         }
-        alert('🧹 ¡Bodega restablecida a cero con éxito!');
-      } catch (error) {
-        console.error("Error al limpiar la base de datos:", error);
-        alert("Ocurrió un error al intentar eliminar los datos.");
-      }
-    });
+      });
+    };
 
-    // --- GENERACIÓN Y DESCARGA DE REPORTE PDF ---
-    document.getElementById('export-pdf-btn').addEventListener('click', () => {
-      if (state.ventas.length === 0) {
-        alert('No hay ventas registradas para generar el reporte PDF.');
-        return;
-      }
-
-      const totalVentas = state.ventas.reduce((acc, v) => acc + Number(v.total), 0);
-      const totalPares = state.ventas.reduce((acc, v) => acc + Number(v.cantidad || 1), 0);
-
-      const filasTabla = state.ventas.map(v => `
-        <tr>
-          <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; font-family: monospace; font-weight: bold; color: #059669;">#${v.codigo}</td>
-          <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; font-weight: 600;">${v.nombre}</td>
-          <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; text-align: center;">${v.talla}</td>
-          <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; text-align: center;">${v.cantidad || 1}</td>
-          <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; text-align: right;">$${Number(v.precioUnitario || v.total).toLocaleString('es-CO')}</td>
-          <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; text-align: right; font-weight: bold; color: #0f172a;">$${Number(v.total).toLocaleString('es-CO')}</td>
-        </tr>
-      `).join('');
-
-      const elemento = document.createElement('div');
-      elemento.innerHTML = `
-        <div style="padding: 30px; font-family: 'Segoe UI', sans-serif; color: #1e293b; background-color: #ffffff;">
-          <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #059669; padding-bottom: 15px; margin-bottom: 20px;">
-            <div>
-              <h1 style="margin: 0; color: #059669; font-size: 24px; font-weight: bold;">Vitrina</h1>
-              <p style="margin: 2px 0 0 0; color: #64748b; font-size: 12px;">Control Comercial & Devoluciones de Bodega</p>
-            </div>
-            <div style="text-align: right;">
-              <h3 style="margin: 0; font-size: 14px; color: #334155;">REPORTE DE VENTAS</h3>
-              <p style="margin: 2px 0 0 0; color: #64748b; font-size: 11px;">Fecha: ${new Date().toLocaleDateString('es-CO')}</p>
-            </div>
-          </div>
-
-          <div style="display: flex; gap: 15px; margin-bottom: 25px;">
-            <div style="flex: 1; background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; text-align: center;">
-              <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: bold;">Total Pares Vendidos</span>
-              <div style="font-size: 20px; font-weight: bold; color: #0f172a; margin-top: 4px;">${totalPares}</div>
-            </div>
-            <div style="flex: 1; background-color: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 8px; padding: 12px; text-align: center;">
-              <span style="font-size: 10px; color: #047857; text-transform: uppercase; font-weight: bold;">Ingresos Totales</span>
-              <div style="font-size: 20px; font-weight: bold; color: #059669; margin-top: 4px;">$${totalVentas.toLocaleString('es-CO')}</div>
-            </div>
-          </div>
-
-          <table style="width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 30px;">
-            <thead>
-              <tr style="background-color: #0f172a; color: #ffffff; text-transform: uppercase; font-size: 10px;">
-                <th style="padding: 10px; text-align: left;">Código</th>
-                <th style="padding: 10px; text-align: left;">Modelo</th>
-                <th style="padding: 10px; text-align: center;">Talla</th>
-                <th style="padding: 10px; text-align: center;">Cant.</th>
-                <th style="padding: 10px; text-align: right;">P. Unitario</th>
-                <th style="padding: 10px; text-align: right;">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${filasTabla}
-            </tbody>
-          </table>
-
-          <div style="border-top: 1px solid #e2e8f0; pt: 15px; text-align: center; font-size: 10px; color: #94a3b8; margin-top: 40px;">
-            <p style="margin: 0;">Vitrina v1.0 • Sistema de Gestión Comercial</p>
-            <p style="margin: 2px 0 0 0;">Diseñado & Desarrollado por <strong>Juan David Lenis</strong></p>
-          </div>
-        </div>
-      `;
-
-      const opciones = {
-        margin: 10,
-        filename: `Reporte_Ventas_Vitrina_${new Date().toISOString().slice(0,10)}.pdf`,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2 },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-      };
-
-      html2pdf().set(opciones).from(elemento).save();
+    // LIMPIAR BODEGA (ADMIN ONLY)
+    document.getElementById('reset-bodega-btn').addEventListener('click', () => {
+      mostrarModal({
+        title: "⚠️ Restablecer Bodega",
+        message: "Esta acción borrará todo el stock, ventas y devoluciones de esta tienda. ¿Continuar?",
+        type: "danger",
+        showCancel: true,
+        onConfirm: async () => {
+          const db = window.appDb;
+          const tiendaId = window.userData.tiendaId;
+          try {
+            for (const subcol of ['productos', 'ventas', 'devoluciones']) {
+              const snapshot = await getDocs(collection(db, `tiendas/${tiendaId}/${subcol}`));
+              await Promise.all(snapshot.docs.map(docSnap => deleteDoc(doc(db, `tiendas/${tiendaId}/${subcol}`, docSnap.id))));
+            }
+            mostrarModal({ title: "Bodega Restablecida", message: "Datos eliminados con éxito.", type: "success" });
+          } catch (error) {
+            mostrarModal({ title: "Error", message: "No se pudo limpiar la tienda.", type: "danger" });
+          }
+        }
+      });
     });
 
     generarCamposTallas();
