@@ -30,6 +30,7 @@
     html.light .text-amber-400 { color: #b45309; }
     html.light .text-red-400 { color: #b91c1c; }
   </style>
+  <style>#visor-lista svg { width: 100%; height: 100%; }</style>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen font-sans antialiased pb-28 md:pb-12 md:pt-20 flex flex-col justify-between">
 
@@ -54,6 +55,23 @@
         <button id="vmodal-btn-ok" class="col-span-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-xl text-xs shadow-lg shadow-emerald-600/20 transition-colors">Aceptar</button>
       </div>
     </div>
+  </div>
+
+  <div id="visor" class="hidden fixed inset-0 z-[70] bg-slate-100 overflow-y-auto p-4" role="dialog" aria-modal="true" aria-label="Códigos en pantalla">
+    <div class="max-w-md mx-auto space-y-3">
+      <div class="flex gap-2 sticky top-0 bg-slate-100 py-2">
+        <button id="visor-pdf" type="button" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-3 py-2 rounded-lg text-xs"><i class="fa-solid fa-file-pdf mr-1.5"></i>Imprimir o guardar PDF</button>
+        <button id="visor-cerrar" type="button" class="bg-slate-300 hover:bg-slate-400 text-slate-900 font-semibold px-4 py-2 rounded-lg text-xs">Cerrar</button>
+      </div>
+      <p class="text-xs text-slate-600">Escanea directamente desde la pantalla y sube el brillo para que se lea mejor.</p>
+      <div id="visor-lista" class="space-y-3"></div>
+    </div>
+  </div>
+
+  <div id="escaner" class="hidden fixed inset-0 z-[70] bg-black/90 flex flex-col items-center justify-center gap-3 p-4" role="dialog" aria-modal="true" aria-label="Escáner de códigos">
+    <video id="escaner-video" playsinline muted class="w-full max-w-md rounded-xl bg-black"></video>
+    <p class="text-white text-xs">Apunta al código de la etiqueta. Cada lectura agrega un par a la venta.</p>
+    <button id="escaner-cerrar" type="button" class="bg-slate-700 hover:bg-slate-600 text-white font-semibold px-4 py-2 rounded-lg text-xs">Cerrar</button>
   </div>
 
   <div id="toasts" class="fixed bottom-20 md:bottom-6 right-4 z-[60] space-y-2" aria-live="polite"></div>
@@ -177,8 +195,8 @@
 
         <div class="bg-slate-800 rounded-xl border border-slate-700 shadow-sm overflow-hidden">
           <div class="p-3 border-b border-slate-700 flex items-center justify-between">
-            <h3 class="text-sm font-bold text-white">Cierre de caja de hoy</h3>
-            <span id="cierre-fecha" class="text-[11px] text-slate-400 capitalize"></span>
+            <h3 class="text-sm font-bold text-white">Cierre de caja</h3>
+            <input id="cierre-dia" type="date" aria-label="Día del cierre" class="text-[11px] p-1 bg-slate-700 text-white border border-slate-600 rounded">
           </div>
           <div class="overflow-x-auto">
             <table class="w-full text-left text-xs text-slate-300">
@@ -186,7 +204,11 @@
                 <tr><th class="p-3">Vendedor</th><th class="p-3 text-center">Ventas</th><th class="p-3 text-center">Pares</th><th class="p-3 text-right">Total</th></tr>
               </thead>
               <tbody id="cierre-body" class="divide-y divide-slate-700"></tbody>
-              <tfoot><tr class="bg-slate-700/40 font-bold"><td colspan="3" class="p-3 text-slate-200">Debe haber en caja</td><td id="cierre-total" class="p-3 text-right text-emerald-400">$0</td></tr></tfoot>
+              <tfoot class="font-semibold">
+                <tr class="bg-slate-700/40"><td colspan="3" class="p-3 text-slate-300">Total vendido</td><td id="cierre-total" class="p-3 text-right">$0</td></tr>
+                <tr><td colspan="3" class="p-3 text-slate-300">En Nequi, transferencia y otros medios</td><td id="cierre-otros" class="p-3 text-right">$0</td></tr>
+                <tr class="bg-slate-700/40 font-bold"><td colspan="3" class="p-3 text-slate-100">Debe haber en caja (efectivo)</td><td id="cierre-efectivo" class="p-3 text-right text-emerald-400">$0</td></tr>
+              </tfoot>
             </table>
           </div>
         </div>
@@ -219,6 +241,8 @@
             <button type="button" data-export="inventario" class="bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-2 rounded-lg font-medium"><i class="fa-solid fa-file-excel mr-1.5"></i>Inventario (Excel)</button>
             <button type="button" data-export="ventas" class="bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-2 rounded-lg font-medium"><i class="fa-solid fa-file-excel mr-1.5"></i>Ventas (Excel)</button>
             <button type="button" data-export="respaldo" class="bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-2 rounded-lg font-medium"><i class="fa-solid fa-database mr-1.5"></i>Copia de seguridad</button>
+            <button type="button" data-export="plantilla" class="bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-2 rounded-lg font-medium"><i class="fa-solid fa-file-arrow-down mr-1.5"></i>Plantilla de inventario</button>
+            <label class="bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-2 rounded-lg font-medium cursor-pointer focus-within:outline focus-within:outline-2"><i class="fa-solid fa-file-import mr-1.5"></i>Importar inventario<input id="import-archivo" type="file" accept=".csv,text/csv" class="sr-only"></label>
           </div>
         </div>
 
@@ -250,6 +274,10 @@
             <button id="carrito-vaciar" type="button" class="text-[11px] text-slate-400 hover:text-red-400">Vaciar</button>
           </div>
           <ul id="carrito-lista" class="divide-y divide-slate-700 text-xs"></ul>
+          <div class="grid grid-cols-2 gap-2 text-xs">
+            <select id="carrito-medio" aria-label="Medio de pago" class="p-2 bg-slate-700 text-white border border-slate-600 rounded-lg"></select>
+            <input id="carrito-precio" type="number" min="0" inputmode="numeric" aria-label="Precio final" class="p-2 bg-slate-700 text-white border border-slate-600 rounded-lg">
+          </div>
           <div class="flex items-center justify-between pt-1">
             <p class="text-xs text-slate-400">Total: <strong id="carrito-total" class="text-lg text-emerald-400">$0</strong></p>
             <button id="carrito-cobrar" type="button" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-xl text-xs shadow-lg shadow-emerald-600/20 transition-colors">Cobrar</button>
@@ -300,8 +328,10 @@
         </div>
 
         <div class="bg-slate-800 rounded-xl border border-slate-700 shadow-sm overflow-hidden">
-          <div class="p-3 border-b border-slate-700 bg-slate-800/50 flex items-center justify-between">
+          <div class="p-3 border-b border-slate-700 bg-slate-800/50 flex flex-wrap items-center gap-2">
             <input type="text" id="search-inventory" placeholder="🔍 Buscar por Código (4 dígitos) o Modelo..." class="text-xs p-2 bg-slate-700 text-white border border-slate-600 rounded-lg w-full max-w-sm">
+            <input type="text" id="escaner-campo" autocomplete="off" aria-label="Escanear código" placeholder="Escanear código (ej. 4821-38) + Enter" class="text-xs p-2 bg-slate-700 text-white border border-slate-600 rounded-lg w-full max-w-xs">
+            <button id="escaner-abrir" type="button" class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-3 py-2 rounded-lg text-xs"><i class="fa-solid fa-camera mr-1.5"></i>Escanear</button>
           </div>
           <div id="inventory-grid" class="p-3 grid gap-3 sm:grid-cols-2"></div>
         </div>
@@ -756,21 +786,16 @@ function renderCarrito() {
       </span></li>`;
   }).join('');
   $('carrito-total').textContent = money(totalCarrito());
+  $('carrito-precio').placeholder = `Precio final (sugerido ${money(totalCarrito())})`;
 }
 
 async function cobrar() {
   if (carrito.length === 0) return;
   const lineas = [...carrito];
-  const pares = lineas.reduce((acc, l) => acc + l.cantidad, 0);
-  const sugerido = totalCarrito();
-  const totalTxt = await abrirModal({
-    title: 'Cobrar venta', cancel: true,
-    message: `${pares} ${pares === 1 ? 'par' : 'pares'}\nPrecio sugerido: ${money(sugerido)}`,
-    input: { label: 'Precio final a cobrar ($):', type: 'number', value: String(sugerido) }
-  });
-  if (totalTxt === null) return;
-  const total = Math.round(Number(totalTxt));
-  if (!Number.isFinite(total) || total < 0) return aviso('Precio inválido', 'Ingresa un valor válido.');
+  const precioEscrito = $('carrito-precio').value.trim();
+  const total = precioEscrito === '' ? totalCarrito() : Math.round(Number(precioEscrito));
+  if (!Number.isFinite(total) || total < 0) return aviso('Precio inválido', 'Ingresa un valor válido o deja el campo vacío.');
+  const medioPago = $('carrito-medio').value;
 
   await ejecutar(async () => {
     const ventaId = `sale_${Date.now()}_${crypto.randomUUID().slice(0, 6)}`;
@@ -783,17 +808,19 @@ async function cobrar() {
         return { productoId: snap.id, codigo, nombre, talla, cantidad: lineas[i].cantidad, precioUnitario: precio, costo };
       });
       refs.forEach((r, i) => tx.update(r, { stock: increment(-lineas[i].cantidad) }));
-      tx.set(docRef('ventas', ventaId), { id: ventaId, items, concepto: conceptoDe(items), total, vendedor: session.nombreUsuario, ...ahora() });
-      movimiento(tx, 'Venta', `${conceptoDe(items)} · ${money(total)}`);
+      tx.set(docRef('ventas', ventaId), { id: ventaId, items, concepto: conceptoDe(items), total, medioPago, vendedor: session.nombreUsuario, ...ahora() });
+      movimiento(tx, 'Venta', `${conceptoDe(items)} · ${money(total)} · ${medioPago}`);
     });
     carrito = [];
+    $('carrito-precio').value = '';
     renderCarrito();
-    await aviso('¡Venta registrada!', `Cobro realizado por ${money(total)}.`, 'success');
+    await aviso('¡Venta registrada!', `${money(total)} en ${medioPago}.`, 'success');
   });
 }
 
 /* ───────── Cambio de talla ───────── */
 async function cambiarTalla(ventaId) {
+  if (!esAdmin()) return aviso('Solo el administrador', 'Esta acción la aprueba el administrador de la tienda.');
   const venta = state.ventas.find((v) => v.id === ventaId);
   if (!venta) return;
   const items = itemsDeVenta(venta);
@@ -821,6 +848,14 @@ async function cambiarTalla(ventaId) {
   if (!nueva) return aviso('Talla no encontrada', `No existe la talla ${tallaTxt.trim()} de esta referencia en el inventario.`);
   if (nueva.talla === item.talla) return aviso('Misma talla', 'Elige una talla distinta a la que ya tiene la venta.');
   if (nueva.stock < item.cantidad) return aviso('Sin stock', `Solo hay ${nueva.stock} pares de la ${nueva.talla.toLowerCase()}.`);
+  const diferenciaEstimada = (nueva.precio - item.precioUnitario) * item.cantidad;
+  if (diferenciaEstimada !== 0) {
+    const acepta = await abrirModal({
+      title: 'Diferencia de precio', type: 'warning', cancel: true,
+      message: diferenciaEstimada > 0 ? `El cliente debe pagar ${money(diferenciaEstimada)} más.` : `Debes devolverle ${money(-diferenciaEstimada)} al cliente.`
+    });
+    if (!acepta) return;
+  }
 
   await ejecutar(async () => {
     await runTransaction(db, async (tx) => {
@@ -839,11 +874,14 @@ async function cambiarTalla(ventaId) {
       else tx.set(anteriorRef, { id: anteriorId, codigo: anterior.codigo, nombre: anterior.nombre, talla: anterior.talla, costo: 0, precio: anterior.precioUnitario, stock: anterior.cantidad });
       tx.update(nuevaRef, { stock: increment(-anterior.cantidad) });
 
-      actuales[indice] = { ...anterior, productoId: nueva.id, talla: nueva.talla };
-      movimiento(tx, 'Cambio de talla', `${anterior.nombre}: ${anterior.talla} → ${nueva.talla}`);
+      const { precio: precioNuevo, costo: costoNuevo = 0 } = nuevaSnap.data();
+      const diferencia = (precioNuevo - anterior.precioUnitario) * anterior.cantidad;
+      actuales[indice] = { ...anterior, productoId: nueva.id, talla: nueva.talla, precioUnitario: precioNuevo, costo: costoNuevo };
+      movimiento(tx, 'Cambio de talla', `${anterior.nombre}: ${anterior.talla} → ${nueva.talla}${diferencia ? ` (diferencia ${money(diferencia)})` : ''}`);
       tx.update(ventaRef, {
         items: actuales,
         concepto: conceptoDe(actuales),
+        total: Number(ventaSnap.data().total) + diferencia,
         cambios: [...(ventaSnap.data().cambios ?? []), { de: anterior.talla, a: nueva.talla, fecha: new Date().toLocaleString('es-CO') }]
       });
     });
@@ -853,6 +891,7 @@ async function cambiarTalla(ventaId) {
 
 /* ───────── Devoluciones ───────── */
 async function devolver(ventaId) {
+  if (!esAdmin()) return aviso('Solo el administrador', 'Esta acción la aprueba el administrador de la tienda.');
   const venta = state.ventas.find((v) => v.id === ventaId);
   if (!venta) return;
   const motivo = await abrirModal({
@@ -878,6 +917,7 @@ async function devolver(ventaId) {
 }
 
 async function reintegrar(devId) {
+  if (!esAdmin()) return aviso('Solo el administrador', 'Esta acción la aprueba el administrador de la tienda.');
   await ejecutar(async () => {
     await runTransaction(db, async (tx) => {
       const devRef = docRef('devoluciones', devId);
@@ -959,11 +999,17 @@ function renderDashboard() {
   $('dash-dev-pendientes').textContent = state.devoluciones.filter((d) => !d.reintegrado).length;
 }
 
+const MEDIOS = ['Efectivo', 'Nequi', 'Bancolombia', 'Transferencia', 'Tarjeta'];
+const medioDe = (venta) => venta.medioPago ?? 'Efectivo';
+const diaISO = (fecha) => `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}-${String(fecha.getDate()).padStart(2, '0')}`;
+const inicioDe = (iso) => new Date(`${iso}T00:00:00`).getTime();
+const ventasDelDia = (iso) => ventasVisibles().filter((v) => orden(v) >= inicioDe(iso) && orden(v) < inicioDe(iso) + 86400000);
+const sumaTotal = (ventas) => ventas.reduce((acc, v) => acc + Number(v.total), 0);
+
 function renderCierre() {
-  const inicioDelDia = new Date().setHours(0, 0, 0, 0);
+  const ventas = ventasDelDia($('cierre-dia').value || diaISO(new Date()));
   const porVendedor = new Map();
-  for (const venta of ventasVisibles()) {
-    if (orden(venta) < inicioDelDia) continue;
+  for (const venta of ventas) {
     const nombre = venta.vendedor || 'Sin nombre';
     const fila = porVendedor.get(nombre) ?? { ventas: 0, pares: 0, total: 0 };
     fila.ventas += 1;
@@ -971,16 +1017,18 @@ function renderCierre() {
     fila.total += Number(venta.total);
     porVendedor.set(nombre, fila);
   }
-  const total = [...porVendedor.values()].reduce((acc, f) => acc + f.total, 0);
-  $('cierre-fecha').textContent = new Date().toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' });
+  const total = sumaTotal(ventas);
+  const efectivo = sumaTotal(ventas.filter((v) => medioDe(v) === 'Efectivo'));
   $('cierre-body').innerHTML = porVendedor.size === 0
-    ? filaVacia(4, 'Aún no hay ventas hoy.')
+    ? filaVacia(4, 'No hay ventas en este día.')
     : [...porVendedor].map(([nombre, f]) => `
       <tr><td class="p-3 font-medium text-slate-200">${esc(nombre)}</td>
         <td class="p-3 text-center">${f.ventas}</td><td class="p-3 text-center">${f.pares}</td>
         <td class="p-3 text-right font-bold text-emerald-400">${money(f.total)}</td></tr>`).join('');
   $('cierre-total').textContent = money(total);
-  $('dash-ventas-hoy').textContent = money(total);
+  $('cierre-otros').textContent = money(total - efectivo);
+  $('cierre-efectivo').textContent = money(efectivo);
+  $('dash-ventas-hoy').textContent = money(sumaTotal(ventasDelDia(diaISO(new Date()))));
 }
 
 function claseStock(stock) {
@@ -1022,7 +1070,9 @@ function renderInventario() {
       ${admin ? `<div class="flex flex-wrap items-center gap-1 pt-2 border-t border-slate-700/60">
         <span class="text-[10px] text-slate-500">Editar:</span>
         ${g.tallas.map((t) => `<button data-action="editar" data-id="${esc(t.id)}" class="text-[10px] px-1.5 py-0.5 rounded bg-slate-700 text-slate-300 hover:text-emerald-400">${esc(String(t.talla).replace('Talla ', ''))}</button>`).join('')}
-        <button data-action="eliminar" data-id="${esc(codigo)}" aria-label="Eliminar referencia ${esc(codigo)}" class="ml-auto text-slate-400 hover:text-red-400 p-1"><i class="fa-regular fa-trash-can"></i></button>
+        <button data-action="ver" data-id="${esc(codigo)}" class="ml-auto text-[10px] px-1.5 py-0.5 rounded bg-slate-700 text-slate-300 hover:text-emerald-400"><i class="fa-solid fa-expand mr-1"></i>Ver códigos</button>
+        <button data-action="etiquetas" data-id="${esc(codigo)}" class="text-[10px] px-1.5 py-0.5 rounded bg-slate-700 text-slate-300 hover:text-emerald-400"><i class="fa-solid fa-print mr-1"></i>Etiquetas</button>
+        <button data-action="eliminar" data-id="${esc(codigo)}" aria-label="Eliminar referencia ${esc(codigo)}" class="text-slate-400 hover:text-red-400 p-1"><i class="fa-regular fa-trash-can"></i></button>
       </div>` : ''}
     </article>`).join('');
 }
@@ -1034,12 +1084,12 @@ function renderVentas() {
     : ventas.map((v) => `
       <tr class="hover:bg-slate-700/40">
         <td class="p-3 text-slate-500 font-mono text-[11px]">${esc(v.fecha)}</td>
-        <td class="p-3 font-medium text-slate-200">${esc(v.concepto)} <span class="text-[10px] text-emerald-400 font-normal">(${esc(v.vendedor || 'Vendedor')})</span>${v.cambios?.length ? ' <span class="text-[10px] text-amber-400">· con cambio de talla</span>' : ''}</td>
+        <td class="p-3 font-medium text-slate-200">${esc(v.concepto)} <span class="text-[10px] text-emerald-400 font-normal">(${esc(v.vendedor || 'Vendedor')})</span> <span class="text-[10px] text-slate-400">· ${esc(medioDe(v))}</span>${v.cambios?.length ? ' <span class="text-[10px] text-amber-400">· con cambio de talla</span>' : ''}</td>
         <td class="p-3 text-right font-bold text-emerald-400">${money(v.total)}${esAdmin() ? `<span class="block text-[10px] font-normal text-slate-400">Ganancia ${money(gananciaDeVenta(v))}</span>` : ''}</td>
         <td class="p-3 text-center space-x-1 whitespace-nowrap">
           <button data-action="recibo" data-id="${esc(v.id)}" aria-label="Enviar recibo por WhatsApp" class="bg-emerald-700 hover:bg-emerald-600 text-white px-2 py-1 rounded text-[11px] transition-colors"><i class="fa-brands fa-whatsapp"></i></button>
-          <button data-action="cambiar" data-id="${esc(v.id)}" class="bg-slate-600 hover:bg-slate-500 text-white px-2 py-1 rounded text-[11px] font-medium transition-colors"><i class="fa-solid fa-right-left mr-1"></i>Cambiar talla</button>
-          <button data-action="devolver" data-id="${esc(v.id)}" class="bg-amber-600/80 hover:bg-amber-600 text-white px-2 py-1 rounded text-[11px] font-medium transition-colors"><i class="fa-solid fa-rotate-left mr-1"></i>Devolver</button>
+          <button data-action="cambiar" data-id="${esc(v.id)}" class="admin-only bg-slate-600 hover:bg-slate-500 text-white px-2 py-1 rounded text-[11px] font-medium transition-colors"><i class="fa-solid fa-right-left mr-1"></i>Cambiar talla</button>
+          <button data-action="devolver" data-id="${esc(v.id)}" class="admin-only bg-amber-600/80 hover:bg-amber-600 text-white px-2 py-1 rounded text-[11px] font-medium transition-colors"><i class="fa-solid fa-rotate-left mr-1"></i>Devolver</button>
         </td>
       </tr>`).join('');
 }
@@ -1058,7 +1108,7 @@ function renderDevoluciones() {
           : '<span class="bg-amber-950/65 text-amber-400 px-2 py-0.5 rounded text-[10px] font-bold">⏳ Pendiente</span>'}</td>
         <td class="p-3 text-center">${d.reintegrado
           ? '<span class="text-slate-500 text-[11px]">Completado</span>'
-          : `<button data-action="reintegrar" data-id="${esc(d.id)}" class="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 rounded text-[11px] font-bold transition-colors"><i class="fa-solid fa-box-archive mr-1"></i>Reintegrar</button>`}</td>
+          : `<button data-action="reintegrar" data-id="${esc(d.id)}" class="admin-only bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 rounded text-[11px] font-bold transition-colors"><i class="fa-solid fa-box-archive mr-1"></i>Reintegrar</button>`}</td>
       </tr>`).join('');
 }
 
@@ -1185,8 +1235,13 @@ const EXPORTAR = {
     ...[...state.productos].sort((a, b) => String(a.codigo).localeCompare(b.codigo) || porTalla(a, b)).map((p) => [p.codigo, p.nombre, p.talla, p.costo, p.precio, p.stock])
   ]), 'text/csv;charset=utf-8'),
   ventas: () => descargar(`ventas_${fechaArchivo()}.csv`, csv([
-    ['Fecha', 'Detalle', 'Vendedor', 'Total', 'Ganancia'],
-    ...[...state.ventas].sort((a, b) => orden(a) - orden(b)).map((v) => [v.fecha, v.concepto, v.vendedor, v.total, gananciaDeVenta(v)])
+    ['Fecha', 'Detalle', 'Vendedor', 'Medio de pago', 'Total', 'Ganancia'],
+    ...[...state.ventas].sort((a, b) => orden(a) - orden(b)).map((v) => [v.fecha, v.concepto, v.vendedor, medioDe(v), v.total, gananciaDeVenta(v)])
+  ]), 'text/csv;charset=utf-8'),
+  plantilla: () => descargar('plantilla_inventario.csv', csv([
+    ['Código', 'Modelo', 'Talla', 'Costo', 'Precio', 'Stock'],
+    ['4821', 'Runner Urbano', '38', '80000', '120000', '4'],
+    ['4821', 'Runner Urbano', '39', '80000', '120000', '2']
   ]), 'text/csv;charset=utf-8'),
   respaldo: () => descargar(`vitrina_respaldo_${session.tiendaId}_${fechaArchivo()}.json`,
     JSON.stringify({ tienda: session.tiendaId, generado: new Date().toISOString(), ...state }, null, 2), 'application/json')
@@ -1204,9 +1259,9 @@ function enviarRecibo(ventaId) {
 }
 
 /* ───────── Avisos breves y tema ───────── */
-function toast(texto) {
+function toast(texto, esError = false) {
   const aviso = document.createElement('div');
-  aviso.className = 'bg-emerald-600 text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-lg';
+  aviso.className = `${esError ? 'bg-red-600' : 'bg-emerald-600'} text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-lg`;
   aviso.textContent = texto;
   $('toasts').append(aviso);
   setTimeout(() => aviso.remove(), 3000);
@@ -1228,11 +1283,282 @@ $('tema-btn').addEventListener('click', () => {
 });
 document.querySelectorAll('[data-export]').forEach((btn) => btn.addEventListener('click', () => EXPORTAR[btn.dataset.export]()));
 
+/* ───────── Importar inventario desde Excel (CSV) ───────── */
+const entero = (valor) => Number.parseInt(String(valor ?? '').replace(/[^\d]/g, ''), 10);
+
+function parsearCsv(texto) {
+  const contenido = texto.replace(/^\ufeff/, '');
+  const primera = contenido.split(/\r?\n/)[0];
+  const separador = (primera.match(/;/g) ?? []).length >= (primera.match(/,/g) ?? []).length ? ';' : ',';
+  const filas = [];
+  let fila = [], celda = '', entreComillas = false;
+  for (let i = 0; i < contenido.length; i++) {
+    const c = contenido[i];
+    if (entreComillas) {
+      if (c !== '"') celda += c;
+      else if (contenido[i + 1] === '"') { celda += '"'; i++; }
+      else entreComillas = false;
+    } else if (c === '"') entreComillas = true;
+    else if (c === separador) { fila.push(celda); celda = ''; }
+    else if (c === '\n' || c === '\r') {
+      if (c === '\r' && contenido[i + 1] === '\n') i++;
+      fila.push(celda); filas.push(fila); fila = []; celda = '';
+    } else celda += c;
+  }
+  if (celda !== '' || fila.length > 0) { fila.push(celda); filas.push(fila); }
+  return filas.filter((f) => f.some((x) => x.trim() !== ''));
+}
+
+function validarFilasInventario(filas) {
+  const productos = [], errores = [];
+  filas.forEach((fila, i) => {
+    const [codigo = '', nombre = '', talla = '', costo, precio, stock] = fila.map((x) => x.trim());
+    const tallaLimpia = talla.replace(/^talla\s*/i, '');
+    const numeros = { costo: entero(costo), precio: entero(precio), stock: entero(stock) };
+    const problema = !/^\d{4}$/.test(codigo) ? 'el código debe tener 4 dígitos'
+      : !nombre ? 'falta el modelo'
+      : !tallaLimpia ? 'falta la talla'
+      : !(numeros.precio > 0) ? 'el precio debe ser mayor a 0'
+      : !(numeros.stock >= 0) ? 'falta el stock'
+      : null;
+    if (problema) errores.push(`Fila ${i + 2}: ${problema}.`);
+    else productos.push({ codigo, nombre, talla: `Talla ${tallaLimpia}`, costo: Number.isNaN(numeros.costo) ? 0 : numeros.costo, precio: numeros.precio, stock: numeros.stock });
+  });
+  return { productos, errores };
+}
+
+async function importarInventario(archivo) {
+  const filas = parsearCsv(await archivo.text());
+  if (filas.length > 0 && !/^\d/.test(filas[0][0].trim())) filas.shift(); // encabezado
+  const { productos, errores } = validarFilasInventario(filas);
+  if (errores.length > 0) {
+    return aviso('Revisa el archivo', `${errores.slice(0, 5).join('\n')}${errores.length > 5 ? `\n…y ${errores.length - 5} errores más.` : ''}\n\nNo se importó nada.`);
+  }
+  if (productos.length === 0) return aviso('Archivo vacío', 'No encontré filas para importar.');
+  const confirmado = await abrirModal({
+    title: 'Importar inventario', type: 'warning', cancel: true,
+    message: `Se cargarán ${productos.length} filas.\nSi una referencia y talla ya existe, se suma el stock.`
+  });
+  if (!confirmado) return;
+
+  for (let i = 0; i < productos.length; i += 400) {
+    const batch = writeBatch(db);
+    productos.slice(i, i + 400).forEach((p) => {
+      const id = buscarProducto(p.codigo, p.talla)?.id ?? idProducto(p.codigo, p.talla);
+      batch.set(docRef('productos', id), { ...p, id, stock: increment(p.stock) }, { merge: true });
+    });
+    if (i + 400 >= productos.length) movimiento(batch, 'Importación', `${productos.length} filas desde ${archivo.name}`);
+    await batch.commit();
+  }
+  await aviso('Importación lista', `${productos.length} filas cargadas al inventario.`, 'success');
+}
+
+$('import-archivo').addEventListener('change', async (e) => {
+  const archivo = e.target.files[0];
+  e.target.value = '';
+  if (archivo && esAdmin()) await ejecutar(() => importarInventario(archivo));
+});
+
+/* ───────── Medios de pago y cierre por fecha ───────── */
+$('carrito-medio').innerHTML = MEDIOS.map((m) => `<option value="${m}">${m}</option>`).join('');
+$('cierre-dia').value = diaISO(new Date());
+$('cierre-dia').addEventListener('change', renderCierre);
+
+/* ───────── Códigos de barras: etiquetas y escáner ───────── */
+const FORMATOS_LECTURA = ['code_128', 'qr_code'];
+const ESPERA_REPETIDO_MS = 1500;
+const CODE128_INICIO_B = 104;
+const CODE128_PARADA = 106;
+// Anchos alternados barra/espacio de cada símbolo Code 128 (el último es la parada).
+const CODE128_PATRONES = [
+  '212222', '222122', '222221', '121223', '121322', '131222', '122213', '122312',
+  '132212', '221213', '221312', '231212', '112232', '122132', '122231', '113222',
+  '123122', '123221', '223211', '221132', '221231', '213212', '223112', '312131',
+  '311222', '321122', '321221', '312212', '322112', '322211', '212123', '212321',
+  '232121', '111323', '131123', '131321', '112313', '132113', '132311', '211313',
+  '231113', '231311', '112133', '112331', '132131', '113123', '113321', '133121',
+  '313121', '211331', '231131', '213113', '213311', '213131', '311123', '311321',
+  '331121', '312113', '312311', '332111', '314111', '221411', '431111', '111224',
+  '111422', '121124', '121421', '141122', '141221', '112214', '112412', '122114',
+  '122411', '142112', '142211', '241211', '221114', '413111', '241112', '134111',
+  '111242', '121142', '121241', '114212', '124112', '124211', '411212', '421112',
+  '421211', '212141', '214121', '412121', '111143', '111341', '131141', '114113',
+  '114311', '411113', '411311', '113141', '114131', '311141', '411131', '211412',
+  '211214', '211232', '2331112'
+];
+
+function code128Anchos(texto) {
+  const valores = [...texto].map((c) => c.charCodeAt(0) - 32);
+  if (valores.length === 0 || valores.some((v) => v < 0 || v > 94)) throw new Error('CODIGO_NO_VALIDO');
+  const suma = valores.reduce((acc, v, i) => acc + v * (i + 1), CODE128_INICIO_B);
+  return [CODE128_INICIO_B, ...valores, suma % 103, CODE128_PARADA].map((v) => CODE128_PATRONES[v]).join('');
+}
+
+function code128Svg(texto) {
+  const zonaSilencio = 10;
+  let x = zonaSilencio;
+  let trazos = '';
+  [...code128Anchos(texto)].map(Number).forEach((ancho, i) => {
+    if (i % 2 === 0) trazos += `M${x} 0h${ancho}v1h-${ancho}z`;
+    x += ancho;
+  });
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${x + zonaSilencio} 1" preserveAspectRatio="none" role="img" aria-label="Código ${esc(texto)}"><path d="${trazos}"/></svg>`;
+}
+
+const textoDeCodigo = (producto) => `${producto.codigo}-${String(producto.talla).replace(/^Talla /, '')}`;
+
+function resolverCodigo(texto) {
+  const partes = /^(\d{4})-(.+)$/.exec(String(texto).trim());
+  return partes ? buscarProducto(partes[1], `Talla ${partes[2]}`) : null;
+}
+
+/* ── Etiquetas imprimibles ── */
+const CSS_ETIQUETAS = `
+  @page { margin: 3mm; }
+  body { margin: 0; display: flex; flex-wrap: wrap; gap: 2mm; font-family: Arial, sans-serif; }
+  .etiqueta { width: 50mm; height: 30mm; box-sizing: border-box; padding: 1.5mm; display: flex; flex-direction: column;
+    align-items: center; justify-content: space-between; text-align: center; font-size: 7pt; line-height: 1.1; break-inside: avoid; }
+  .etiqueta b { font-size: 8pt; max-height: 2.2em; overflow: hidden; }
+  .etiqueta svg { width: 100%; height: 11mm; }`;
+
+function etiquetaHtml(producto) {
+  const texto = textoDeCodigo(producto);
+  let barras = '';
+  try { barras = code128Svg(texto); } catch { barras = ''; }
+  return `<div class="etiqueta"><b>${esc(producto.nombre)}</b><span>#${esc(producto.codigo)} · ${esc(producto.talla)} · ${money(producto.precio)}</span>${barras}<span>${esc(texto)}</span></div>`;
+}
+
+function imprimirDocumento(cuerpo) {
+  const marco = document.createElement('iframe');
+  marco.style.cssText = 'position:fixed;width:0;height:0;border:0';
+  marco.srcdoc = `<!doctype html><html lang="es"><meta charset="utf-8"><style>${CSS_ETIQUETAS}</style><body>${cuerpo}</body></html>`;
+  marco.onload = () => {
+    marco.contentWindow.print();
+    setTimeout(() => marco.remove(), 60000);
+  };
+  document.body.append(marco);
+}
+
+async function imprimirEtiquetas(codigo) {
+  const tallas = state.productos.filter((p) => p.codigo === codigo).sort(porTalla);
+  if (tallas.length === 0) return;
+  const respuesta = await abrirModal({
+    title: 'Imprimir etiquetas', cancel: true,
+    message: `#${codigo} ${tallas[0].nombre}\n${tallas.length} tallas`,
+    input: { label: 'Etiquetas por talla:', type: 'number', value: '1' }
+  });
+  if (respuesta === null) return;
+  const copias = Number.parseInt(respuesta, 10);
+  if (!(copias >= 1 && copias <= 50)) return aviso('Cantidad inválida', 'Elige entre 1 y 50 etiquetas por talla.');
+  imprimirDocumento(tallas.flatMap((p) => Array(copias).fill(etiquetaHtml(p))).join(''));
+}
+
+/* ── Códigos en pantalla (sin impresora) ── */
+let codigoEnVisor = null;
+
+function tarjetaEnPantalla(producto) {
+  const texto = textoDeCodigo(producto);
+  let barras = '';
+  try { barras = code128Svg(texto); } catch { barras = ''; }
+  return `<article class="bg-white rounded-xl p-4 text-center text-slate-900 shadow">
+    <h3 class="font-bold">${esc(producto.nombre)}</h3>
+    <p class="text-xs">#${esc(producto.codigo)} · ${esc(producto.talla)} · ${money(producto.precio)}</p>
+    <div class="h-24 my-2">${barras}</div>
+    <p class="font-mono text-sm">${esc(texto)}</p></article>`;
+}
+
+const productosDeReferencia = (codigo) => state.productos.filter((p) => p.codigo === codigo).sort(porTalla);
+
+function abrirVisor(codigo) {
+  const tallas = productosDeReferencia(codigo);
+  if (tallas.length === 0) return;
+  codigoEnVisor = codigo;
+  $('visor-lista').innerHTML = tallas.map(tarjetaEnPantalla).join('');
+  $('visor').classList.remove('hidden');
+}
+
+function cerrarVisor() {
+  codigoEnVisor = null;
+  $('visor').classList.add('hidden');
+}
+
+$('visor-cerrar').addEventListener('click', cerrarVisor);
+$('visor-pdf').addEventListener('click', () => {
+  const tallas = productosDeReferencia(codigoEnVisor);
+  if (tallas.length > 0) imprimirDocumento(tallas.map(etiquetaHtml).join(''));
+});
+
+/* ── Escáner: cámara y lector USB ── */
+let escaner = null; // { stream, temporizador }
+
+function leerCodigo(texto) {
+  const producto = resolverCodigo(texto);
+  if (!producto) return toast(`Código no reconocido: ${texto}`, true);
+  if (producto.stock === 0) return toast(`${producto.nombre} ${producto.talla}: agotada`, true);
+  cambiarCantidad(producto.id, 1);
+  toast(`${producto.nombre} · ${producto.talla} agregado`);
+}
+
+async function abrirEscaner() {
+  if (!('BarcodeDetector' in window)) {
+    return aviso('Cámara no disponible', 'Este navegador no lee códigos con la cámara. Usa un lector USB o escribe el código en el campo de escaneo.');
+  }
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+  } catch {
+    return aviso('Sin acceso a la cámara', 'Permite el acceso a la cámara en el navegador e inténtalo de nuevo.');
+  }
+  const video = $('escaner-video');
+  video.srcObject = stream;
+  await video.play();
+  const detector = new BarcodeDetector({ formats: FORMATOS_LECTURA });
+  const ultimo = { texto: '', hora: 0 };
+  escaner = { stream, temporizador: null };
+
+  const ciclo = async () => {
+    if (!escaner) return;
+    const [lectura] = await detector.detect(video).catch(() => []);
+    const repetido = lectura && lectura.rawValue === ultimo.texto && Date.now() - ultimo.hora < ESPERA_REPETIDO_MS;
+    if (lectura && !repetido) {
+      Object.assign(ultimo, { texto: lectura.rawValue, hora: Date.now() });
+      navigator.vibrate?.(60);
+      leerCodigo(lectura.rawValue);
+    }
+    if (escaner) escaner.temporizador = setTimeout(ciclo, 250);
+  };
+  $('escaner').classList.remove('hidden');
+  ciclo();
+}
+
+function cerrarEscaner() {
+  if (!escaner) return;
+  clearTimeout(escaner.temporizador);
+  escaner.stream.getTracks().forEach((pista) => pista.stop());
+  escaner = null;
+  $('escaner').classList.add('hidden');
+}
+
+$('escaner-abrir').addEventListener('click', () => ejecutar(abrirEscaner));
+$('escaner-cerrar').addEventListener('click', cerrarEscaner);
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  cerrarEscaner();
+  cerrarVisor();
+});
+$('escaner-campo').addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+  const texto = e.target.value.trim();
+  e.target.value = '';
+  if (texto) leerCodigo(texto);
+});
+
 /* ───────── Eventos delegados y manejo de errores ───────── */
 const ACCIONES = {
   mas: (id) => cambiarCantidad(id, 1), menos: (id) => cambiarCantidad(id, -1),
   editar: entrarEdicion, cambiar: cambiarTalla, devolver, reintegrar, eliminar: eliminarReferencia,
-  recibo: enviarRecibo, primera: () => formProducto.classList.remove('hidden')
+  recibo: enviarRecibo, etiquetas: imprimirEtiquetas, ver: abrirVisor, primera: () => formProducto.classList.remove('hidden')
 };
 
 document.addEventListener('click', (e) => {
