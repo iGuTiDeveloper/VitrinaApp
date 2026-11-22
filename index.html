@@ -1367,6 +1367,8 @@ $('cierre-dia').addEventListener('change', renderCierre);
 /* ───────── Códigos de barras: etiquetas y escáner ───────── */
 const FORMATOS_LECTURA = ['code_128', 'qr_code'];
 const ESPERA_REPETIDO_MS = 1500;
+// Lector de respaldo para navegadores sin BarcodeDetector (iPhone). Se descarga solo cuando hace falta.
+const URL_LECTOR_RESPALDO = 'https://cdn.jsdelivr.net/npm/barcode-detector@3.0.1/dist/es/ponyfill.min.js';
 const CODE128_INICIO_B = 104;
 const CODE128_PARADA = 106;
 // Anchos alternados barra/espacio de cada símbolo Code 128 (el último es la parada).
@@ -1499,9 +1501,19 @@ function leerCodigo(texto) {
   toast(`${producto.nombre} · ${producto.talla} agregado`);
 }
 
+async function crearDetector() {
+  if ('BarcodeDetector' in window) return new BarcodeDetector({ formats: FORMATOS_LECTURA });
+  toast('Preparando el lector…');
+  const { BarcodeDetector: LectorRespaldo } = await import(URL_LECTOR_RESPALDO);
+  return new LectorRespaldo({ formats: FORMATOS_LECTURA });
+}
+
 async function abrirEscaner() {
-  if (!('BarcodeDetector' in window)) {
-    return aviso('Cámara no disponible', 'Este navegador no lee códigos con la cámara. Usa un lector USB o escribe el código en el campo de escaneo.');
+  let detector;
+  try {
+    detector = await crearDetector();
+  } catch {
+    return aviso('Lector no disponible', 'No se pudo cargar el lector de códigos. Revisa tu conexión o usa un lector USB.');
   }
   let stream;
   try {
@@ -1512,7 +1524,6 @@ async function abrirEscaner() {
   const video = $('escaner-video');
   video.srcObject = stream;
   await video.play();
-  const detector = new BarcodeDetector({ formats: FORMATOS_LECTURA });
   const ultimo = { texto: '', hora: 0 };
   escaner = { stream, temporizador: null };
 
